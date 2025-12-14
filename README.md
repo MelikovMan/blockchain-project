@@ -7,10 +7,13 @@ cd von-network
 ./manage start
 
 # В разных терминалах запускаем агентов
-docker-compose -f docker-compose.hospital.yml up
-docker-compose -f docker-compose.patient.yml up
+docker-compose -f hospital-docker-compose.yml up -d
+docker-compose -f patient-docker-compose.yml up -d
+docker-compose -f regulator-docker-compose.yml up -d
 
 # Запускаем контроллеры
+# python init_controller.py
+# python regular_controller.py
 python hospital_controller.py
 python patient_controller.py
 ```

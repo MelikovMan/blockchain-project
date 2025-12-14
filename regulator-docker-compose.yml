@@ -1,0 +1,45 @@
+version: '3.7'
+services:
+  regulator-agent:
+    image: bcgovimages/aries-cloudagent:py3.12_1.2.0
+    container_name: regulator_agent
+    environment:
+      # Идентификация регулятора
+      - ACAPY_LABEL=State_Medical_Regulator
+      
+      # Административный API для контроллера
+      - ACAPY_ADMIN=["0.0.0.0", "8041"]
+      - ACAPY_ADMIN_API_KEY=regulator-admin-key-789
+      
+      # Публичный DID регулятора (должен быть зарегистрирован в сети с ролью ENDORSER)
+      - ACAPY_WALLET_SEED=state_regulator_seed_000000001
+      - ACAPY_ENDORSER_ROLE=ENDORSER
+      
+      # Кошелек
+      - ACAPY_WALLET_KEY=StrongRegulatorWalletKey789
+      - ACAPY_WALLET_NAME=StateRegulatorWallet
+      
+      # Сеть Indy
+      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
+      
+      # Транспорты
+      - ACAPY_ENDPOINT=http://regulator-agent:8040
+      - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8040"]]
+      - ACAPY_OUTBOUND_TRANSPORT=["http"]
+      
+      # Автоматизация и политики
+      - ACAPY_AUTO_PROVISION=true
+      - ACAPY_AUTO_ACCEPT_INVITES=true
+      - ACAPY_AUTO_ACCEPT_REQUESTS=true
+      
+      # Режим эндоузера для подписи транзакций
+      - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser
+      - ACAPY_AUTO_ENDORSE_TRANSACTIONS=true
+      
+      # Верификация входящих запросов на регистрацию
+      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8070/webhooks/topic
+    ports:
+      - "8040:8040"  # Для сообщений между агентами
+      - "8041:8041"  # Административный API
+    command: >
+      start
