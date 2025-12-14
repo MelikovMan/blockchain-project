@@ -2,6 +2,7 @@
 
 ```bash
 # Запуск тестового блокчейна Indy
+git clone https://github.com/bcgov/von-network
 cd von-network
 ./manage start
 
