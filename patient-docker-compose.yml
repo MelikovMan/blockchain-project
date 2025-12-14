@@ -1,0 +1,29 @@
+version: '3.7'
+services:
+  patient-agent:
+    image: bcgovimages/aries-cloudagent:py3.12_1.2.0
+    container_name: patient_agent_alice
+    environment:
+      - ACAPY_LABEL=Alice_Patient_Wallet
+      - ACAPY_ENDPOINT=http://patient-agent:8030
+      - ACAPY_ADMIN=["0.0.0.0", "8031"]
+      - ACAPY_ADMIN_IN_KEY=patient-admin-key-456
+      - ACAPY_WALLET_KEY=StrongPatientWalletKey456
+      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
+      - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8030"]]
+      - ACAPY_OUTBOUND_TRANSPORT=["http"]
+      - ACAPY_AUTO_PROVISION=true
+      - ACAPY_AUTO_ACCEPT_INVITES=true
+      - ACAPY_AUTO_ACCEPT_REQUESTS=true
+      - ACAPY_AUTO_STORE_CREDENTIAL=true  # Автоматически сохранять принятые credentials
+    ports:
+      - "8030:8030"
+      - "8031:8031"
+    command: >
+      start --wallet-name AlicePatientWallet
+            --wallet-key StrongPatientWalletKey456
+            --admin-api-key patient-admin-key-456
+            --auto-provision
+            --auto-accept-invites
+            --auto-accept-requests
+            --auto-store-credential

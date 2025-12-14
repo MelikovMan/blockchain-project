@@ -1,0 +1,158 @@
+import requests
+import json
+import logging
+import time
+from flask import Flask, request, jsonify, render_template_string
+
+app = Flask(__name__)
+
+# Конфигурация
+AGENT_ADMIN_URL = "http://localhost:8031"
+AGENT_API_KEY = "patient-admin-key-456"
+HEADERS = {"X-API-Key": AGENT_API_KEY, "Content-Type": "application/json"}
+
+# Шаблон простого UI для пациента (в реальности это мобильное приложение)
+PATIENT_UI_HTML = """
+<!DOCTYPE html>
+<html>
+<head><title>Мой Медицинский Кошелек</title></head>
+<body>
+    <h2>Привет, {{ patient_name }}!</h2>
+    
+    <h3>1. Получить приглашение от больницы</h3>
+    <form action="/receive-invitation" method="post">
+        <textarea name="invitation" placeholder="Вставьте приглашение (JSON)..." rows="6" cols="50"></textarea><br>
+        <button type="submit">Принять приглашение</button>
+    </form>
+    
+    <h3>2. Мои текущие соединения</h3>
+    <button onclick="fetchConnections()">Обновить список</button>
+    <div id="connections"></div>
+    
+    <h3>3. Мои медицинские справки</h3>
+    <button onclick="fetchCredentials()">Показать справки</button>
+    <div id="credentials"></div>
+    
+    <h3>4. Экстренный доступ</h3>
+    <p>При запросе данных от врача:</p>
+    <button onclick="checkProofRequests()">Проверить запросы на данные</button>
+    <div id="proofs"></div>
+</body>
+</html>
+"""
+
+@app.route('/')
+def patient_dashboard():
+    """Простой интерфейс пациента"""
+    return render_template_string(PATIENT_UI_HTML, patient_name="Иван")
+
+@app.route('/webhooks/topic/<topic>', methods=['POST'])
+def handle_webhooks(topic):
+    """
+    КРИТИЧЕСКИ ВАЖНЫЙ ЭНДПОИНТ: ACA-Py отправляет сюда все события.
+    Это асинхронный способ получения уведомлений от агента.
+    """
+    message = request.json
+    logging.info(f"[Webhook] Топик: {topic}, Сообщение: {message}")
+    
+    if topic == 'connections':
+        # Уведомление об изменении статуса соединения
+        if message['state'] == 'response':
+            logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
+    
+    elif topic == 'issue_credential':
+        # Уведомление о поступлении новой медицинской справки
+        if message['state'] == 'offer_received':
+            cred_ex_id = message['credential_exchange_id']
+            logging.info(f"📄 Получено предложение справки. ID: {cred_ex_id}")
+            # Автоматически принимаем оффер
+            requests.post(f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-request", 
+                         headers=HEADERS, json={})
+        
+        elif message['state'] == 'credential_received':
+            logging.info("🎉 Медицинская справка успешно сохранена в кошельке!")
+    
+    elif topic == 'present_proof':
+        # Уведомление о запросе доказательства (например, от врача скорой)
+        if message['state'] == 'request_received':
+            pres_ex_id = message['presentation_exchange_id']
+            logging.info(f"🔍 Получен запрос на предоставление данных. ID: {pres_ex_id}")
+            
+            # В ЭКСТРЕННОМ СЛУЧАЕ: Автоматически предоставить только критичные данные
+            if is_emergency_request(message['presentation_request']):
+                emergency_response = {
+                    "requested_attributes": {
+                        "blood_group_attr": {"cred_id": get_credential_id_for("blood_group_rh"), "revealed": True}
+                    }
+                }
+                requests.post(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/send-presentation",
+                             headers=HEADERS, json=emergency_response)
+                logging.warning("⚠️ Автоматически предоставлены экстренные данные!")
+    
+    return jsonify({"status": "ok"}), 200
+
+def is_emergency_request(presentation_request):
+    """Определяет, является ли запрос экстренным (по метаданным или политике)"""
+    return "emergency" in presentation_request.get('name', '').lower()
+
+def get_credential_id_for(attribute_name):
+    """Находит ID credential, содержащего нужный атрибут"""
+    # Упрощенная логика. В реальности нужно искать в wallet
+    creds_resp = requests.get(f"{AGENT_ADMIN_URL}/credentials", headers=HEADERS)
+    if creds_resp.status_code == 200:
+        for cred in creds_resp.json()['results']:
+            if attribute_name in str(cred.get('attrs', {})):
+                return cred['credential_id']
+    return None
+
+@app.route('/receive-invitation', methods=['POST'])
+def receive_invitation():
+    """Принять приглашение от больницы для установления соединения"""
+    invitation_json = request.form.get('invitation')
+    if not invitation_json:
+        return "❌ Неверный формат приглашения", 400
+    try:
+        invitation = json.loads(invitation_json)
+    except:
+        return "❌ Неверный формат приглашения", 400
+    
+    resp = requests.post(f"{AGENT_ADMIN_URL}/connections/receive-invitation", 
+                        headers=HEADERS, json={"invitation": invitation})
+    
+    if resp.status_code == 200:
+        return "✅ Приглашение принято! Соединение устанавливается..."
+    return "❌ Ошибка при принятии приглашения", 500
+
+@app.route('/connections', methods=['GET'])
+def get_connections():
+    """Получить список всех активных соединений"""
+    resp = requests.get(f"{AGENT_ADMIN_URL}/connections", headers=HEADERS)
+    if resp.status_code == 200:
+        connections = resp.json()['results']
+        return jsonify([{
+            "id": c["connection_id"],
+            "label": c.get("their_label", "Неизвестный"),
+            "state": c["state"]
+        } for c in connections])
+    return jsonify([])
+
+@app.route('/credentials', methods=['GET'])
+def get_credentials():
+    """Получить список всех медицинских справок в кошельке"""
+    resp = requests.get(f"{AGENT_ADMIN_URL}/credentials", headers=HEADERS)
+    if resp.status_code == 200:
+        credentials = []
+        for cred in resp.json()['results']:
+            attrs = cred.get('attrs', {})
+            credentials.append({
+                "issuer": attrs.get('issuer', 'Неизвестно'),
+                "type": cred.get('schema_id', '').split(':')[-2] if ':' in cred.get('schema_id', '') else 'Unknown',
+                "issued": cred.get('created_at', ''),
+                "attrs": {k: v[:50] + '...' if len(str(v)) > 50 else v for k, v in attrs.items()}
+            })
+        return jsonify(credentials)
+    return jsonify([])
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    app.run(port=8060, debug=True)

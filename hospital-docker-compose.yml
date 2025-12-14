@@ -1,0 +1,33 @@
+version: '3.7'
+services:
+  hospital-agent:
+    image: bcgovimages/aries-cloudagent:py3.12_1.2.0
+    container_name: hospital_agent
+    environment:
+      - ACAPY_LABEL=City_Hospital_Issuer
+      # Ключевое исправление: передаем admin-хост и порт как массив JSON
+      - ACAPY_ADMIN=["0.0.0.0", "8021"]
+      - ACAPY_ADMIN_API_KEY=super-secret-admin-api-key-123
+      - ACAPY_WALLET_KEY=VeryStrongHospitalWalletKey
+      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
+      - ACAPY_ENDPOINT=http://hospital-agent:8020
+      - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8020"]]
+      - ACAPY_OUTBOUND_TRANSPORT=["http"]
+      - ACAPY_PUBLIC_DID_SEED=very_strong_hospital_seed_000000001
+      - ACAPY_ENDORSER_ROLE=ENDORSER
+      - ACAPY_AUTO_PROVISION=true
+      - ACAPY_AUTO_ACCEPT_INVITES=true
+      - ACAPY_AUTO_ACCEPT_REQUESTS=true
+      - ACAPY_AUTO_STORE_CREDENTIAL=true
+    ports:
+      - "8020:8020" # Транспорт для обмена с другими агентами
+      - "8021:8021" # Административный API для вашего контроллера
+    command: >
+      start
+      --wallet-name HospitalWallet
+      --wallet-key VeryStrongHospitalWalletKey
+      --endpoint http://hospital-agent:8020
+      --auto-provision
+      --auto-accept-invites
+      --auto-accept-requests
+      --auto-store-credential
