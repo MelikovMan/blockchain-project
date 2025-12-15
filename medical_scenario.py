@@ -1,112 +1,206 @@
 """
-ПОЛНЫЙ СЦЕНАРИЙ ВЗАИМОДЕЙСТВИЯ МЕЖДУ БОЛЬНИЦЕЙ И ПАЦИЕНТОМ
+ПОЛНЫЙ СЦЕНАРИЙ С ХРАНЕНИЕМ ССЫЛОК В VC
 """
 import asyncio
 import requests
 import json
+import time
 
-class MedicalScenarioRunner:
+class VCStorageScenario:
     
     def __init__(self):
         self.hospital_admin = "http://localhost:8021"
         self.patient_admin = "http://localhost:8031"
-        self.hospital_headers = {"X-API-Key": "super-secret-admin-api-key-123"}
-        self.patient_headers = {"X-API-Key": "patient-admin-key-456"}
-    
-    async def run_full_scenario(self):
-        """Запуск полного медицинского сценария"""
+        self.regulator_admin = "http://localhost:8041"
+        self.hospital_controller = "http://localhost:8050"
+        self.patient_controller = "http://localhost:8060"
         
-        # ЭТАП 1: Больница создает приглашение для пациента
-        print("1. 🏥 Больница создает приглашение для пациента...")
+        self.headers = {
+            "hospital": {"X-API-Key": "super-secret-admin-api-key-123"},
+            "patient": {"X-API-Key": "patient-admin-key-456"},
+            "regulator": {"X-API-Key": "regulator-admin-key-789"}
+        }
+    
+    async def run_scenario(self):
+        """Запуск сценария с хранением ссылок в VC"""
+        
+        print("\n" + "="*60)
+        print("🎯 СЦЕНАРИЙ: Хранение blockchain-ссылок в VC пациента")
+        print("="*60)
+        
+        # ЭТАП 1: Установление соединения
+        print("\n1. 🤝 Установление соединения больница-пациент...")
+        
         invitation_resp = requests.post(
             f"{self.hospital_admin}/connections/create-invitation",
-            headers=self.hospital_headers,
+            headers=self.headers["hospital"],
             json={"auto_accept": True}
         )
-        invitation = invitation_resp.json()['invitation']
-        print(f"   Приглашение создано: {invitation['@id']}")
         
-        # ЭТАП 2: Пациент принимает приглашение
-        print("2. 👤 Пациент принимает приглашение...")
+        invitation = invitation_resp.json()['invitation']
+        
+        # Пациент принимает приглашение
         receive_resp = requests.post(
             f"{self.patient_admin}/connections/receive-invitation",
-            headers=self.patient_headers,
+            headers=self.headers["patient"],
             json={"invitation": invitation}
         )
-        connection_id = receive_resp.json()['connection_id']
         
-        # Ждем установления соединения
+        connection_id = receive_resp.json()['connection_id']
+        print(f"   ✅ Соединение установлено: {connection_id}")
+        
         await asyncio.sleep(2)
         
-        # ЭТАП 3: Больница выпускает медицинскую справку
-        print("3. 📋 Больница выпускает медицинскую справку...")
-        credential_offer = {
-            "connection_id": connection_id,
-            "credential_preview": {
-                "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
-                "attributes": [
-                    {"name": "full_name", "value": "Иванов Иван Иванович"},
-                    {"name": "date_of_birth", "value": "1985-05-15"},
-                    {"name": "blood_group_rh", "value": "A+"},
-                    {"name": "severe_allergies", "value": json.dumps(["Пенициллин"])},
-                    {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
-                ]
-            },
-            "cred_def_id": "CRED_DEF_ID_FROM_HOSPITAL"  # Должен быть реальный ID
+        # ЭТАП 2: Выпуск VC с blockchain-ссылками в атрибутах
+        print("\n2. 🏥 Выпуск медицинской справки со встроенными ссылками...")
+        
+        issue_data = {
+            "patient_id": "patient_123",
+            "connection_id": connection_id
         }
         
-        issue_resp = requests.post(
-            f"{self.hospital_admin}/issue-credential/send-offer",
-            headers=self.hospital_headers,
-            json=credential_offer
-        )
-        print(f"   Справка предложена: {issue_resp.status_code}")
-        
-        # ЭТАП 4: Симулируем экстренный запрос данных (через 5 секунд)
-        print("4. ⚠️  Симуляция экстренного запроса через 5 сек...")
-        await asyncio.sleep(5)
-        
-        # Другая больница запрашивает данные пациента
-        emergency_request = {
-            "connection_id": connection_id,  # В реальности это будет другое соединение
-            "proof_request": {
-                "name": "EMERGENCY: Blood Type Request",
-                "version": "1.0",
-                "requested_attributes": {
-                    "blood_attr": {
-                        "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": "CRED_DEF_ID_FROM_HOSPITAL"}]
-                    }
-                }
-            }
-        }
-        
-        proof_resp = requests.post(
-            f"{self.hospital_admin}/present-proof/send-request",
-            headers=self.hospital_headers,
-            json=emergency_request
+        issue_response = requests.post(
+            f"{self.hospital_controller}/issue-credential",
+            json=issue_data
         )
         
-        if proof_resp.status_code == 200:
-            print("   ✅ Экстренный запрос отправлен. Система пациента должна автоматически ответить.")
+        if issue_response.status_code == 200:
+            issue_result = issue_response.json()
+            print(f"   ✅ VC выпущен успешно!")
+            print(f"   📊 Exchange ID: {issue_result.get('credential_exchange_id')}")
+            print(f"   💡 Примечание: Все ссылки сохранены в атрибутах VC")
+        else:
+            print(f"   ❌ Ошибка: {issue_response.text}")
+            return
+        
+        await asyncio.sleep(3)
+        
+        # ЭТАП 3: Проверка, что VC сохранен у пациента
+        print("\n3. 👤 Проверка VC в кошельке пациента...")
+        
+        credentials_resp = requests.get(
+            f"{self.patient_controller}/credentials",
+            headers=self.headers["patient"]
+        )
+        
+        if credentials_resp.status_code == 200:
+            credentials = credentials_resp.json()
+            if credentials:
+                print(f"   ✅ Найдено VC в кошельке: {len(credentials)}")
+                
+                # Показываем атрибуты первого VC
+                if credentials:
+                    cred = credentials[0]
+                    attrs = cred.get('attrs', {})
+                    
+                    print(f"   📋 Основные данные:")
+                    print(f"      • ФИО: {attrs.get('full_name')}")
+                    print(f"      • Группа крови: {attrs.get('blood_group_rh')}")
+                    
+                    print(f"   🔗 Blockchain-ссылки в атрибутах:")
+                    if attrs.get('_hospital_endpoint'):
+                        print(f"      • Эндпоинт больницы: {attrs.get('_hospital_endpoint')}")
+                    if attrs.get('_blockchain_ref'):
+                        print(f"      • Blockchain ссылка: присутствует")
+                    if attrs.get('_hospital_did'):
+                        print(f"      • DID больницы: {attrs.get('_hospital_did')}")
+            else:
+                print(f"   ⚠️  VC не найден в кошельке")
+        else:
+            print(f"   ❌ Ошибка получения VC: {credentials_resp.status_code}")
+        
+        await asyncio.sleep(2)
+        
+        # ЭТАП 4: Верификация VC через ссылку в атрибутах
+        print("\n4. 🔍 Верификация VC через ссылку из атрибутов...")
+        
+        if credentials:
+            credential_id = credentials[0].get('credential_id')
             
-            # Проверяем статус через 3 секунды
-            await asyncio.sleep(3)
-            pres_ex_id = proof_resp.json()['presentation_exchange_id']
-            status_resp = requests.get(
-                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}",
-                headers=self.hospital_headers
+            verify_data = {
+                "credential_id": credential_id,
+                "verifier_did": "did:sov:verifier_123"
+            }
+            
+            verify_response = requests.post(
+                f"{self.patient_controller}/credential/{credential_id}/verify",
+                json=verify_data
             )
             
-            if status_resp.json()['state'] == 'verified':
-                print("   🩺 Данные верифицированы! Врач получил группу крови пациента.")
-                revealed_attrs = status_resp.json().get('revealed_attrs', {})
-                if revealed_attrs:
-                    print(f"   📊 Полученные данные: {revealed_attrs}")
+            if verify_response.status_code == 200:
+                verify_result = verify_response.json()
+                print(f"   ✅ Запрос на верификацию отправлен")
+                print(f"   📤 Эндпоинт: {verify_result.get('hospital_endpoint')}")
+            else:
+                print(f"   ❌ Ошибка верификации: {verify_response.text}")
         
-        print("\n🎯 Сценарий завершен!")
+        await asyncio.sleep(2)
+        
+        # ЭТАП 5: Экстренный доступ
+        print("\n5. 🚨 Тест экстренного доступа...")
+        
+        # Пациент активирует экстренный режим
+        emergency_resp = requests.post(
+            f"{self.patient_controller}/emergency/enable",
+            headers=self.headers["patient"]
+        )
+        
+        if emergency_resp.status_code == 200:
+            emergency_result = emergency_resp.json()
+            print(f"   ✅ Экстренный режим активирован")
+            print(f"   ⏰ Действует до: {time.ctime(emergency_result.get('expires_at'))}")
+            print(f"   📋 Разрешенные данные: {emergency_result.get('scope')}")
+        
+        # Симулируем запрос от врача скорой помощи
+        print("\n6. 🩺 Врач скорой помощи запрашивает экстренные данные...")
+        
+        emergency_verify_data = {
+            "patient_name": "Иванов Иван Иванович",
+            "date_of_birth": "1985-05-15",
+            "emergency_code": "EMERGENCY-ACCESS-2024"
+        }
+        
+        doctor_response = requests.post(
+            f"{self.hospital_controller}/emergency-verify",
+            json=emergency_verify_data
+        )
+        
+        if doctor_response.status_code == 200:
+            doctor_result = doctor_response.json()
+            if doctor_result.get('emergency'):
+                print(f"   ✅ Экстренные данные предоставлены врачу!")
+                patients = doctor_result.get('patients', [])
+                if patients:
+                    print(f"   🩸 Группа крови: {patients[0].get('blood_group_rh')}")
+                    print(f"   ⚠️  Аллергии: {patients[0].get('severe_allergies')}")
+        else:
+            print(f"   ❌ Ошибка экстренного доступа: {doctor_response.text}")
+        
+        await asyncio.sleep(2)
+        
+        # ЭТАП 6: Отключение экстренного режима
+        print("\n7. 🔒 Отключение экстренного режима...")
+        
+        disable_resp = requests.post(
+            f"{self.patient_controller}/emergency/disable",
+            headers=self.headers["patient"]
+        )
+        
+        if disable_resp.status_code == 200:
+            print(f"   ✅ Экстренный режим отключен")
+        
+        print("\n" + "="*60)
+        print("🎯 СЦЕНАРИЙ ЗАВЕРШЕН!")
+        print("="*60)
+        
+        print("\n📋 ИТОГИ РЕАЛИЗАЦИИ:")
+        print("   ✅ Blockchain-ссылки хранятся в атрибутах VC")
+        print("   ✅ Пациент имеет полный контроль через свой кошелек")
+        print("   ✅ Эндпоинты для верификации встроены в VC")
+        print("   ✅ Реализован экстренный доступ с контролем пациента")
+        print("   ✅ Нет отдельной базы данных для хранения ссылок")
 
 # Запуск сценария
 if __name__ == "__main__":
-    runner = MedicalScenarioRunner()
-    asyncio.run(runner.run_full_scenario())
+    scenario = VCStorageScenario()
+    asyncio.run(scenario.run_scenario())
