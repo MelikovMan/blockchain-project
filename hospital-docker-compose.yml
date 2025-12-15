@@ -5,7 +5,6 @@ services:
     container_name: hospital_agent
     environment:
       - ACAPY_LABEL=City_Hospital_Issuer
-      # Ключевое исправление: передаем admin-хост и порт как массив JSON
       - ACAPY_ADMIN=["0.0.0.0", "8021"]
       - ACAPY_ADMIN_API_KEY=super-secret-admin-api-key-123
       - ACAPY_WALLET_KEY=VeryStrongHospitalWalletKey
@@ -13,15 +12,29 @@ services:
       - ACAPY_ENDPOINT=http://hospital-agent:8020
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8020"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
+      
+      # Публичный DID больницы (должен совпадать с выданным регулятором)
       - ACAPY_PUBLIC_DID_SEED=very_strong_hospital_seed_000000001
+      
       - ACAPY_ENDORSER_ROLE=ENDORSER
       - ACAPY_AUTO_PROVISION=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
       - ACAPY_AUTO_ACCEPT_REQUESTS=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
+      
+      # Webhook для получения транзакций на подпись от регулятора
+      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8050/webhooks/topic
+      
+      # Включение протокола эндоузинга для работы с регулятором
+      - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser
+      - ACAPY_AUTO_ENDORSE_TRANSACTIONS=false  # Ручное подтверждение транзакций
+      
+      # Конфигурация для запросов одобрения у регулятора
+      - ACAPY_AUTO_VERIFY_PRESENTATION=true
+      - ACAPY_NOTIFY_REVOCATION=false
     ports:
       - "8020:8020" # Транспорт для обмена с другими агентами
-      - "8021:8021" # Административный API для вашего контроллера
+      - "8021:8021" # Административный API для контроллера
     command: >
       start
       --wallet-name HospitalWallet
@@ -31,3 +44,4 @@ services:
       --auto-accept-invites
       --auto-accept-requests
       --auto-store-credential
+      --webhook-url http://host.docker.internal:8050/webhooks/topic
