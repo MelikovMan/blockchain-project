@@ -1,3 +1,4 @@
+from typing import Dict, List
 import requests
 import json
 import logging
@@ -138,6 +139,309 @@ HTML_INTERFACE = """
 </html>
 """
 
+
+# Разрешенные схемы для каждого учреждения
+ENTITY_SCHEMA_PERMISSIONS = {}  # did -> [approved_schemas]
+
+# Шаблоны стандартных медицинских схем
+STANDARD_MEDICAL_SCHEMAS = {
+    "medical_record": {
+        "name": "BasicMedicalRecord",
+        "version": "1.0",
+        "attributes": ["full_name", "date_of_birth", "blood_group_rh"],
+        "description": "Базовая медицинская карта"
+    },
+    "allergy_record": {
+        "name": "AllergyRecord", 
+        "version": "1.0",
+        "attributes": ["patient_id", "allergens", "severity", "reactions"],
+        "description": "Запись об аллергиях"
+    },
+    "prescription": {
+        "name": "MedicalPrescription",
+        "version": "1.0", 
+        "attributes": ["patient_id", "medication", "dosage", "instructions", "doctor_id"],
+        "description": "Медицинский рецепт"
+    }
+}
+
+@app.route('/approve-schema', methods=['POST'])
+def approve_schema_request():
+    """
+    Требование 3: Проверка и одобрение схемы от больницы
+    """
+    try:
+        data = request.json
+        hospital_did = data.get("hospital_did")
+        schema_name = data.get("schema_name")
+        attributes = data.get("attributes", [])
+        
+        # Проверяем, зарегистрирована ли больница
+        if hospital_did not in [e["did"] for e in REGISTERED_ENTITIES.values()]:
+            return jsonify({
+                "approved": False,
+                "reason": "Больница не зарегистрирована в системе"
+            }), 404
+        
+        # Проверяем соответствие стандартам
+        validation_result = validate_schema_against_standards(schema_name, attributes)
+        
+        if validation_result["valid"]:
+            # Одобряем схему
+            if hospital_did not in ENTITY_SCHEMA_PERMISSIONS:
+                ENTITY_SCHEMA_PERMISSIONS[hospital_did] = []
+            
+            approved_schema = {
+                "schema_name": schema_name,
+                "schema_version": data.get("schema_version", "1.0"),
+                "attributes": attributes,
+                "approved_date": time.time(),
+                "schema_id": f"{hospital_did}:2:{schema_name}:{data.get('schema_version', '1.0')}"
+            }
+            
+            ENTITY_SCHEMA_PERMISSIONS[hospital_did].append(approved_schema)
+            
+            logging.info(f"Схема '{schema_name}' одобрена для больницы {hospital_did}")
+            
+            # Отправляем транзакцию в блокчейн для регистрации разрешения
+            send_permission_transaction(hospital_did, approved_schema)
+            
+            return jsonify({
+                "approved": True,
+                "schema": approved_schema,
+                "message": "Схема одобрена и зарегистрирована"
+            }), 200
+        else:
+            return jsonify({
+                "approved": False,
+                "reason": validation_result["reason"]
+            }), 400
+            
+    except Exception as e:
+        logging.error(f"Ошибка при одобрении схемы: {str(e)}")
+        return jsonify({"approved": False, "reason": str(e)}), 500
+
+@app.route('/modify-schemas', methods=['POST'])
+def modify_entity_schemas():
+    """
+    Требование 4: Изменение списка разрешенных схем для учреждения
+    """
+    data = request.json
+    hospital_did = data.get("hospital_did")
+    requested_changes = data.get("requested_changes", [])
+    
+    # Проверяем право на модификацию
+    if not can_modify_schemas(hospital_did):
+        return jsonify({
+            "approved": False,
+            "reason": "У учреждения недостаточно прав для модификации схем"
+        }), 403
+    
+    approved_changes = []
+    rejected_changes = []
+    
+    for change in requested_changes:
+        # Проверяем каждую новую схему
+        validation = validate_schema_against_standards(
+            change["schema_name"], 
+            change["attributes"]
+        )
+        
+        if validation["valid"]:
+            approved_changes.append(change)
+        else:
+            rejected_changes.append({
+                "schema": change,
+                "reason": validation["reason"]
+            })
+    
+    # Обновляем разрешенные схемы
+    if hospital_did not in ENTITY_SCHEMA_PERMISSIONS:
+        ENTITY_SCHEMA_PERMISSIONS[hospital_did] = []
+    
+    for change in approved_changes:
+        approved_schema = {
+            "schema_name": change["schema_name"],
+            "schema_version": change.get("schema_version", "1.0"),
+            "attributes": change["attributes"],
+            "approved_date": time.time()
+        }
+        ENTITY_SCHEMA_PERMISSIONS[hospital_did].append(approved_schema)
+    
+    return jsonify({
+        "approved": True,
+        "approved_changes": approved_changes,
+        "rejected_changes": rejected_changes,
+        "message": f"Одобрено {len(approved_changes)} из {len(requested_changes)} изменений"
+    }), 200
+
+@app.route('/register-did-for-entity', methods=['POST'])
+def register_did_for_entity():
+    """
+    Требование 1: Регистрация публичного DID для медицинского учреждения
+    """
+    try:
+        data = request.json
+        entity_name = data['institution_name']
+        entity_type = data['institution_type']
+        license_number = data['license_number']
+        
+        # Генерация уникального DID и seed
+        seed_base = f"{license_number}_{entity_name}_{int(time.time())}"
+        entity_seed = hashlib.sha256(seed_base.encode()).hexdigest()[:32]
+        entity_did = f"did:sov:{hashlib.sha256(entity_seed.encode()).hexdigest()[:16]}"
+        
+        # Регистрация DID в блокчейне через агента
+        nym_transaction = {
+            "did": entity_did,
+            "seed": entity_seed,
+            "role": "ENDORSER" if entity_type == "HOSPITAL" else "TRUST_ANCHOR",
+            "alias": entity_name
+        }
+        
+        response = requests.post(
+            f"{AGENT_ADMIN_URL}/ledger/register-nym",
+            headers=HEADERS,
+            json=nym_transaction,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            # Сохраняем информацию об учреждении
+            entity_id = hashlib.md5(license_number.encode()).hexdigest()
+            REGISTERED_ENTITIES[entity_id] = {
+                "id": entity_id,
+                "name": entity_name,
+                "did": entity_did,
+                "seed": entity_seed,
+                "type": entity_type,
+                "license": license_number,
+                "registration_date": time.time(),
+                "status": "ACTIVE"
+            }
+            
+            # Автоматически одобряем базовые схемы для больниц
+            if entity_type == "HOSPITAL":
+                ENTITY_SCHEMA_PERMISSIONS[entity_did] = [
+                    STANDARD_MEDICAL_SCHEMAS["medical_record"]
+                ]
+            
+            logging.info(f"Зарегистрировано учреждение: {entity_name}, DID: {entity_did}")
+            
+            return jsonify({
+                "success": True,
+                "entity_id": entity_id,
+                "did": entity_did,
+                "seed": entity_seed,
+                "role": nym_transaction["role"],
+                "approved_schemas": ENTITY_SCHEMA_PERMISSIONS.get(entity_did, []),
+                "instructions": f"Используйте seed и DID для настройки агента учреждения"
+            }), 200
+        else:
+            return jsonify({"error": "Ошибка регистрации DID в блокчейне"}), 500
+            
+    except Exception as e:
+        logging.error(f"Ошибка регистрации DID: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/entity/<entity_did>/schemas', methods=['GET'])
+def get_entity_schemas(entity_did):
+    """Получить список разрешенных схем для учреждения"""
+    if entity_did in ENTITY_SCHEMA_PERMISSIONS:
+        return jsonify({
+            "entity_did": entity_did,
+            "approved_schemas": ENTITY_SCHEMA_PERMISSIONS[entity_did],
+            "total_count": len(ENTITY_SCHEMA_PERMISSIONS[entity_did])
+        }), 200
+    else:
+        return jsonify({"error": "DID учреждения не найден"}), 404
+
+@app.route('/verify-credential-issue', methods=['POST'])
+def verify_credential_issue_request():
+    """
+    Верификация запроса на выпуск credential от больницы
+    (мог бы использоваться через webhook от агента регулятора)
+    """
+    data = request.json
+    hospital_did = data.get("issuer_did")
+    schema_id = data.get("schema_id")
+    
+    # Извлекаем название схемы из schema_id
+    schema_name = schema_id.split(":")[-2] if ":" in schema_id else ""
+    
+    # Проверяем, разрешена ли эта схема для больницы
+    if hospital_did in ENTITY_SCHEMA_PERMISSIONS:
+        approved_schemas = ENTITY_SCHEMA_PERMISSIONS[hospital_did]
+        for schema in approved_schemas:
+            if schema["schema_name"] == schema_name:
+                return jsonify({
+                    "approved": True,
+                    "schema": schema,
+                    "timestamp": time.time()
+                }), 200
+    
+    return jsonify({
+        "approved": False,
+        "reason": f"Схема '{schema_name}' не разрешена для данного учреждения"
+    }), 403
+
+def validate_schema_against_standards(schema_name: str, attributes: List[str]) -> Dict:
+    """Проверка схемы на соответствие стандартам"""
+    
+    # Минимальные требования
+    if not schema_name or not attributes:
+        return {"valid": False, "reason": "Название схемы и атрибуты обязательны"}
+    
+    if len(attributes) < 2:
+        return {"valid": False, "reason": "Схема должна содержать минимум 2 атрибута"}
+    
+    # Проверка на стандартные медицинские атрибуты
+    standard_attrs = {"patient_id", "full_name", "date_of_birth"}
+    found_standard = any(attr in standard_attrs for attr in attributes)
+    
+    if not found_standard and "medical" in schema_name.lower():
+        return {"valid": False, "reason": "Медицинская схема должна содержать стандартные идентификаторы пациента"}
+    
+    # Дополнительные проверки могут включать:
+    # - Соответствие HL7/FHIR
+    # - Наличие обязательных полей для типа документа
+    # - Проверку форматов данных
+    
+    return {"valid": True, "reason": "Схема соответствует стандартам"}
+
+def can_modify_schemas(hospital_did: str) -> bool:
+    """Проверка, может ли учреждение изменять схемы"""
+    # В реальной системе здесь проверка ролей и прав
+    for entity in REGISTERED_ENTITIES.values():
+        if entity["did"] == hospital_did and entity["status"] == "ACTIVE":
+            return entity["type"] in ["HOSPITAL", "CLINIC"]
+    return False
+
+def send_permission_transaction(hospital_did: str, schema: Dict):
+    """Отправка транзакции в блокчейн о разрешении схемы"""
+    # В реальной системе это была бы транзакция в Indy
+    # Здесь упрощенная заглушка
+    transaction_data = {
+        "type": "SCHEMA_PERMISSION",
+        "hospital_did": hospital_did,
+        "schema": schema,
+        "timestamp": time.time(),
+        "regulator_did": get_regulator_did()
+    }
+    
+    # Логируем "транзакцию"
+    logging.info(f"Транзакция разрешения схемы: {transaction_data}")
+    return True
+
+def get_regulator_did() -> str:
+    """Получаем DID регулятора"""
+    try:
+        resp = requests.get(f"{AGENT_ADMIN_URL}/wallet/did/public", headers=HEADERS)
+        if resp.status_code == 200:
+            return resp.json().get("result", {}).get("did", "did:sov:regulator")
+    except:
+        pass
+    return "did:sov:state_medical_regulator"
 @app.route('/')
 def regulator_dashboard():
     """Панель управления регулятора"""
