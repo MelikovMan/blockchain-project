@@ -207,8 +207,9 @@ def handle_present_proof_webhook(message):
                 presentation_details = detail_resp.json()
                 
                 # Теперь извлекаем revealed_attrs из деталей
-                revealed_attrs = presentation_details.get('revealed_attrs', {})
-                
+                proof = presentation_details.get('requested_proof', {})
+                revealed_attrs = proof.get("revealed_attrs")
+                logging.info(presentation_details)
                 if revealed_attrs:
                     logging.info(f"📊 Раскрытые данные: {json.dumps(revealed_attrs, indent=2)}")
                     # Сохраняем в журнал доступа
