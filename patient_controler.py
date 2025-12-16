@@ -5,7 +5,7 @@ import time
 from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
-
+app.logger.setLevel(logging.INFO)
 # Конфигурация
 AGENT_ADMIN_URL = "http://localhost:8031"
 AGENT_API_KEY = "patient-admin-key-456"
@@ -46,7 +46,7 @@ def patient_dashboard():
     """Простой интерфейс пациента"""
     return render_template_string(PATIENT_UI_HTML, patient_name="Иван")
 
-@app.route('/webhooks/topic/<topic>', methods=['POST'])
+@app.route('/webhooks/topic/<topic>/', methods=['POST'])
 def handle_webhooks(topic):
     """
     КРИТИЧЕСКИ ВАЖНЫЙ ЭНДПОИНТ: ACA-Py отправляет сюда все события.
@@ -79,14 +79,28 @@ def handle_webhooks(topic):
             logging.info(f"🔍 Получен запрос на предоставление данных. ID: {pres_ex_id}")
             
             # В ЭКСТРЕННОМ СЛУЧАЕ: Автоматически предоставить только критичные данные
-            if is_emergency_request(message['presentation_request']):
+            presentation_request = message.get('presentation_request')
+            if presentation_request is None:
+                # Запрашиваем у агента
+                resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}", headers=HEADERS)
+                if resp.status_code == 200:
+                    presentation_request = resp.json().get('presentation_request')
+                else:
+                    logging.error(f"Не удалось получить запрос на презентацию {pres_ex_id}: {resp.text}")
+                    return 400
+            if is_emergency_request(presentation_request):
                 emergency_response = {
                     "requested_attributes": {
-                        "blood_group_attr": {"cred_id": get_credential_id_for("blood_group_rh"), "revealed": True}
-                    }
+                        "blood_attr": {"cred_id": get_credential_id(pres_ex_id), "revealed": True}
+                    },
+                    "requested_predicates":{},
+                    "self_attested_attributes":{},
                 }
-                requests.post(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/send-presentation",
+                print(f"Тело ответа: {emergency_response}")
+                requesting = requests.post(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/send-presentation",
                              headers=HEADERS, json=emergency_response)
+                if requesting.status_code != 200:
+                    print(f"Ошибка отправки репрезентации: {requesting.text}")
                 logging.warning("⚠️ Автоматически предоставлены экстренные данные!")
     
     return jsonify({"status": "ok"}), 200
@@ -95,15 +109,17 @@ def is_emergency_request(presentation_request):
     """Определяет, является ли запрос экстренным (по метаданным или политике)"""
     return "emergency" in presentation_request.get('name', '').lower()
 
-def get_credential_id_for(attribute_name):
+def get_credential_id(pres_ex_id):
     """Находит ID credential, содержащего нужный атрибут"""
     # Упрощенная логика. В реальности нужно искать в wallet
-    creds_resp = requests.get(f"{AGENT_ADMIN_URL}/credentials", headers=HEADERS)
-    if creds_resp.status_code == 200:
-        for cred in creds_resp.json()['results']:
-            if attribute_name in str(cred.get('attrs', {})):
-                return cred['credential_id']
-    return None
+    creds_resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/credentials", headers=HEADERS)
+    if creds_resp.status_code != 200:
+        print(f"Ошибка запроса получения credentials по предложению {creds_resp.text}")
+        return None
+    if not creds_resp.json():
+        print(f"Не найдены credentials по запросу")
+        return None
+    return creds_resp.json()[0]['cred_info']["referent"]
 
 @app.route('/receive-invitation', methods=['POST'])
 def receive_invitation():

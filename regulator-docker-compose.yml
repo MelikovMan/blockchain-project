@@ -11,7 +11,7 @@ services:
       - ACAPY_ADMIN=["0.0.0.0", "8041"]
       - ACAPY_ADMIN_API_KEY=regulator-admin-key-789
       
-      # Публичный DID регулятора (должен быть зарегистрирован в сети с ролью ENDORSER)
+      # Публичный DID регулятора (главный эндоузер в сети)
       - ACAPY_WALLET_SEED=state_regulator_seed_000000001
       - ACAPY_ENDORSER_ROLE=ENDORSER
       
@@ -32,14 +32,29 @@ services:
       - ACAPY_AUTO_ACCEPT_INVITES=true
       - ACAPY_AUTO_ACCEPT_REQUESTS=true
       
-      # Режим эндоузера для подписи транзакций
+      # РЕЖИМ ЭНДОУЗЕРА - ключевое изменение
       - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser
-      - ACAPY_AUTO_ENDORSE_TRANSACTIONS=true
+      - ACAPY_AUTO_ENDORSE_TRANSACTIONS=true  # Автоматически подписываем транзакции от одобренных учреждений
       
-      # Верификация входящих запросов на регистрацию
-      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8070/webhooks/topic
+      # Webhook для контроллера регулятора
+      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8070/webhooks
+      
+      # Конфигурация для управления транзакциями
+      - ACAPY_ENDORSER_CONNECTION_ID_AUTO_ACCEPT=true
+      - ACAPY_ENDORSER_ENDORSE_ALL=true
+      - ACAPY_ENDORSER_AUTO_ENDORSE=true
+      
+      # Мониторинг транзакций от больниц
+      - ACAPY_NOTIFY_REVOCATION=true
+      - ACAPY_NOTIFY_ENDORSEMENT=true
     ports:
       - "8040:8040"  # Для сообщений между агентами
       - "8041:8041"  # Административный API
     command: >
       start
+      --endpoint http://regulator-agent:8040
+      --auto-provision
+      --auto-accept-invites
+      --auto-accept-requests
+      --endorser-protocol-role endorser
+      --auto-endorse-transactions

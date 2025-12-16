@@ -49,14 +49,14 @@ class MedicalScenarioRunner:
             return
         hospital_connection_id = hospital_id_resp.json()['results'][0]['connection_id']
         print(f"Id соедиения больницы: {hospital_connection_id}")
-        req_resp = requests.post(
-            f"{self.hospital_admin}/connections/{hospital_connection_id}/accept-request",
-            headers=self.hospital_headers,
-        )
-        if req_resp.status_code != 200:
-            print(f"Ошибка установки соедиения: {req_resp.text}")
-            return
-        await asyncio.sleep(5)
+        #req_resp = requests.post(
+        #    f"{self.hospital_admin}/connections/{hospital_connection_id}/accept-request",
+        #    headers=self.hospital_headers,
+        #)
+        #if req_resp.status_code != 200:
+        #    print(f"Ошибка установки соедиения: {req_resp.text}")
+        #    return
+        #await asyncio.sleep(5)
         
         # ЭТАП 3: Больница выпускает медицинскую справку
         print("3. 📋 Больница выпускает медицинскую справку...")
@@ -72,7 +72,7 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:8:default"  # Должен быть реальный ID
+            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:20:default"  # Должен быть реальный ID
         }
         
         issue_resp = requests.post(
@@ -98,9 +98,10 @@ class MedicalScenarioRunner:
                 "requested_attributes": {
                     "blood_attr": {
                         "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": "CRED_DEF_ID_FROM_HOSPITAL"}]
+                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:20:default"}]
                     }
-                }
+                },
+                "requested_predicates":{}
             }
         }
         
@@ -114,14 +115,16 @@ class MedicalScenarioRunner:
             print("   ✅ Экстренный запрос отправлен. Система пациента должна автоматически ответить.")
             
             # Проверяем статус через 3 секунды
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
             pres_ex_id = proof_resp.json()['presentation_exchange_id']
-            status_resp = requests.get(
-                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}",
+            print(f"ID презентации: {pres_ex_id}")
+            status_resp = requests.post(
+                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}/verify-presentation",
                 headers=self.hospital_headers
             )
             if status_resp.status_code != 200:
                 print(f"Ошибка запроса верификации! {status_resp.text}")
+                return
             if status_resp.json()['state'] == 'verified':
                 print("   🩺 Данные верифицированы! Врач получил группу крови пациента.")
                 revealed_attrs = status_resp.json().get('revealed_attrs', {})
