@@ -6,7 +6,7 @@ git clone https://github.com/bcgov/von-network
 cd von-network
 ./manage build (один раз)
 ./manage start
-
+cd ..
 # В разных терминалах запускаем агентов
 docker-compose -f hospital-docker-compose.yml up -d
 docker-compose -f patient-docker-compose.yml up -d
