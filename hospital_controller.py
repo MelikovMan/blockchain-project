@@ -26,7 +26,7 @@ def create_schema_and_cred_def():
     Шаг 1: Регистрация схемы и определения учетных данных в блокчейне.
     Выполняется один раз при инициализации системы.
     """
-    # 1. Создание схемы
+    
     schema_body = {
         "schema_name": "HospitalMedicalRecord",
         "schema_version": "1.0.0",
@@ -38,13 +38,27 @@ def create_schema_and_cred_def():
             "chronic_diagnoses"
         ]
     }
-    schema_resp = requests.post(f"{AGENT_ADMIN_URL}/schemas", headers=HEADERS, json=schema_body)
-    if schema_resp.status_code != 200:
-        logging.error(f"Ошибка создания схемы: {schema_resp.text}")
-        return None
+    # 1. Проверка существования схемы
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord",headers=HEADERS)
+    if schema_find:
+        print("Схема уже существует")
+        schema_result = schema_find.json()
+        schema_id = schema_result["schema_ids"][0]
+    else:
+        # 1. Создание схемы
+        schema_resp = requests.post(f"{AGENT_ADMIN_URL}/schemas", headers=HEADERS, json=schema_body)
+        if schema_resp.status_code != 200:
+            logging.error(f"Ошибка создания схемы: {schema_resp.text}")
+            return None
 
-    schema_result = schema_resp.json()
-    schema_id = schema_result["schema_id"]
+        schema_result = schema_resp.json()
+        schema_id = schema_result["schema_id"]
+    # 1. Проверка существования схемы кредов
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord", headers=HEADERS)
+    if cred_def_find:
+        print("Определение VC уже существует")
+        cred_result = cred_def_find.json()
+        return cred_result["credential_definition_ids"][0]
 
     # 2. Создание определения учетных данных на основе схемы
     cred_def_body = {

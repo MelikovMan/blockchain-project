@@ -31,17 +31,37 @@ class MedicalScenarioRunner:
         receive_resp = requests.post(
             f"{self.patient_admin}/connections/receive-invitation",
             headers=self.patient_headers,
-            json={"invitation": invitation}
+            json=invitation
         )
-        connection_id = receive_resp.json()['connection_id']
-        
+        if receive_resp.status_code != 200:
+            print(f"Ошибка принятия приглашения: {receive_resp.text}")
+            return
+        patient_connection_id = receive_resp.json()['connection_id']
+        print(f"Id соедиения пациента: {patient_connection_id}")
         # Ждем установления соединения
-        await asyncio.sleep(2)
+
+        hospital_id_resp = requests.get(
+            f"{self.hospital_admin}/connections",
+            headers=self.hospital_headers,
+        )
+        if hospital_id_resp.status_code != 200:
+            print(f"Ошибка получения id: {hospital_id_resp.text}")
+            return
+        hospital_connection_id = hospital_id_resp.json()['results'][0]['connection_id']
+        print(f"Id соедиения больницы: {hospital_connection_id}")
+        req_resp = requests.post(
+            f"{self.hospital_admin}/connections/{hospital_connection_id}/accept-request",
+            headers=self.hospital_headers,
+        )
+        if req_resp.status_code != 200:
+            print(f"Ошибка установки соедиения: {req_resp.text}")
+            return
+        await asyncio.sleep(5)
         
         # ЭТАП 3: Больница выпускает медицинскую справку
         print("3. 📋 Больница выпускает медицинскую справку...")
         credential_offer = {
-            "connection_id": connection_id,
+            "connection_id": hospital_connection_id,
             "credential_preview": {
                 "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
                 "attributes": [
@@ -52,7 +72,7 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": "CRED_DEF_ID_FROM_HOSPITAL"  # Должен быть реальный ID
+            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:8:default"  # Должен быть реальный ID
         }
         
         issue_resp = requests.post(
@@ -60,6 +80,9 @@ class MedicalScenarioRunner:
             headers=self.hospital_headers,
             json=credential_offer
         )
+        if issue_resp.status_code!= 200:
+            print(f"Ошибка отправки медицинской справки: {issue_resp.text}" )
+            return
         print(f"   Справка предложена: {issue_resp.status_code}")
         
         # ЭТАП 4: Симулируем экстренный запрос данных (через 5 секунд)
@@ -68,7 +91,7 @@ class MedicalScenarioRunner:
         
         # Другая больница запрашивает данные пациента
         emergency_request = {
-            "connection_id": connection_id,  # В реальности это будет другое соединение
+            "connection_id": hospital_connection_id,  # В реальности это будет другое соединение
             "proof_request": {
                 "name": "EMERGENCY: Blood Type Request",
                 "version": "1.0",
@@ -97,13 +120,17 @@ class MedicalScenarioRunner:
                 f"{self.hospital_admin}/present-proof/records/{pres_ex_id}",
                 headers=self.hospital_headers
             )
-            
+            if status_resp.status_code != 200:
+                print(f"Ошибка запроса верификации! {status_resp.text}")
             if status_resp.json()['state'] == 'verified':
                 print("   🩺 Данные верифицированы! Врач получил группу крови пациента.")
                 revealed_attrs = status_resp.json().get('revealed_attrs', {})
                 if revealed_attrs:
                     print(f"   📊 Полученные данные: {revealed_attrs}")
-        
+            else: 
+                print(f"Ошибка верификации данных! Статус: f{status_resp.json()['state']}")
+        else:
+            print(f"Ошибка отправки экстренного запроса: {proof_resp.text}")
         print("\n🎯 Сценарий завершен!")
 
 # Запуск сценария

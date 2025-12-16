@@ -13,9 +13,10 @@ services:
       - ACAPY_ENDPOINT=http://hospital-agent:8020
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8020"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
-      - ACAPY_PUBLIC_DID_SEED=very_strong_hospital_seed_000000001
+      - ACAPY_PUBLIC_DID_SEED=very_strong_hospital_seed0000000
       - ACAPY_ENDORSER_ROLE=ENDORSER
       - ACAPY_AUTO_PROVISION=true
+      - ACAPY_WALLET_ALLOW_INSECURE_SEED=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
       - ACAPY_AUTO_ACCEPT_REQUESTS=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
