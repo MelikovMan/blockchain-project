@@ -72,7 +72,7 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:20:default"  # Должен быть реальный ID
+            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default"  # Должен быть реальный ID
         }
         
         issue_resp = requests.post(
@@ -98,7 +98,7 @@ class MedicalScenarioRunner:
                 "requested_attributes": {
                     "blood_attr": {
                         "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:20:default"}]
+                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default"}]
                     }
                 },
                 "requested_predicates":{}

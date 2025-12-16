@@ -47,7 +47,7 @@ def create_schema_and_cred_def():
     """
     
     schema_body = {
-        "schema_name": "HospitalMedicalRecord33",
+        "schema_name": "HospitalMedicalRecord333",
         "schema_version": "1.0.5",
         "attributes": [
             "full_name",
@@ -58,7 +58,7 @@ def create_schema_and_cred_def():
         ]
     }
     # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord33",headers=HEADERS)
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord333",headers=HEADERS)
     if schema_find.json()["schema_ids"]:
         print("Схема уже существует")
         schema_result = schema_find.json()
@@ -73,7 +73,7 @@ def create_schema_and_cred_def():
         schema_result = schema_resp.json()
         schema_id = schema_result["schema_id"]
     # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord33", headers=HEADERS)
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord333", headers=HEADERS)
     if cred_def_find.json()["credential_definition_ids"]:
         print("Определение VC уже существует")
         cred_result = cred_def_find.json()
