@@ -1,7 +1,7 @@
 Подготовка инфраструктуры:
 
 ```bash
-# Запуск тестового блокчейна Indy
+# Запуск тестового блокчейна Indy - нужен Docker
 git clone https://github.com/bcgov/von-network
 cd von-network
 ./manage build (один раз)
@@ -12,7 +12,7 @@ docker-compose -f hospital-docker-compose.yml up -d
 docker-compose -f patient-docker-compose.yml up -d
 docker-compose -f regulator-docker-compose.yml up -d
 
-# Запускаем контроллеры
+# Запускаем контроллеры - на python, нужен Flask и requests. Можно установить через venv
 # python init_controller.py
 # python regular_controller.py
 python hospital_controller.py
