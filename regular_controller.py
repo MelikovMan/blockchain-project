@@ -14,20 +14,19 @@ AGENT_ADMIN_URL = "http://localhost:8041"
 AGENT_API_KEY = "regulator-admin-key-789"
 HEADERS = {"X-API-Key": AGENT_API_KEY, "Content-Type": "application/json"}
 
-# База данных зарегистрированных учреждений
-REGISTERED_INSTITUTIONS = {
-    # Формат: institution_id -> {name, did, role, status, credential_types, registered_at}
+# База данных соединений регулятора с больницами
+REGULATOR_CONNECTIONS = {
+    # Формат: hospital_did -> connection_id
 }
+
+# База данных зарегистрированных учреждений
+REGISTERED_INSTITUTIONS = {}
 
 # База данных заявок на выпуск VC
-CREDENTIAL_ISSUANCE_REQUESTS = {
-    # Формат: request_id -> {hospital_id, schema_data, status, decision_date, decision_reason}
-}
+CREDENTIAL_ISSUANCE_REQUESTS = {}
 
 # База данных изменений типов VC
-CREDENTIAL_MODIFICATION_REQUESTS = {
-    # Формат: modification_id -> {hospital_id, action, credential_types, status, decision}
-}
+CREDENTIAL_MODIFICATION_REQUESTS = {}
 
 # Справочник разрешенных типов медицинских документов
 APPROVED_CREDENTIAL_TYPES = {
@@ -280,52 +279,6 @@ HTML_INTERFACE = """
             }
         }
         
-        // Диалог изменения разрешенных VC
-        function openModifyDialog(institutionId) {
-            const institution = REGISTERED_INSTITUTIONS[institutionId];
-            if (!institution) return;
-            
-            let html = `<h3>Изменение разрешенных типов VC для ${institution.name}</h3>`;
-            html += `<form id="modifyForm">
-                <input type="hidden" name="institution_id" value="${institutionId}">
-                <select name="action" style="padding: 8px; margin: 5px;">
-                    <option value="ADD">Добавить типы</option>
-                    <option value="REMOVE">Удалить типы</option>
-                </select><br>`;
-            
-            Object.entries(APPROVED_CREDENTIAL_TYPES).forEach(([key, value]) => {
-                const isAllowed = institution.allowed_credentials.includes(key);
-                html += `<label style="display: block; margin: 5px;">
-                    <input type="checkbox" name="credential_types" value="${key}" ${isAllowed ? 'checked' : ''}>
-                    ${value} (${key})
-                </label>`;
-            });
-            
-            html += `<button type="submit" class="btn">Отправить на утверждение</button>
-                </form>`;
-            
-            const dialog = window.open("", "Изменение VC", "width=500,height=600");
-            dialog.document.write(html);
-            dialog.document.getElementById('modifyForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = Object.fromEntries(formData.entries());
-                data.credential_types = formData.getAll('credential_types');
-                
-                const response = await fetch('/request-credential-modification', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(data)
-                });
-                
-                if (response.ok) {
-                    alert('Запрос отправлен на утверждение');
-                    dialog.close();
-                    loadModificationRequests();
-                }
-            };
-        }
-        
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', () => {
             loadCredentialRequests();
@@ -337,9 +290,6 @@ HTML_INTERFACE = """
 </html>
 """
 
-# Глобальная переменная для хранения списка учреждений
-REGISTERED_INSTITUTIONS = {}
-
 @app.route('/')
 def regulator_dashboard():
     """Панель управления регулятора"""
@@ -349,31 +299,99 @@ def regulator_dashboard():
 def handle_regulator_webhooks(topic):
     """Обработка вебхуков от агента регулятора"""
     message = request.json
-    logging.info(f"[Regulator Webhook] Topic: {topic}, Message: {message}")
+    logging.info(f"[Regulator Webhook] Topic: {topic}, Message: {json.dumps(message, indent=2)}")
     
-    if topic == 'endorsements':
-        # Обработка запросов на эндоузинг транзакций
-        state = message.get('state')
-        transaction_id = message.get('transaction_id')
-        
-        if state == 'request-received':
-            # Транзакция ожидает подписи регулятора
-            logging.info(f"Получена транзакция для подписи: {transaction_id}")
-            # Можно добавить бизнес-логику автоматической проверки транзакций
-            # Например, проверять, что учреждение имеет право на регистрацию схемы
-            
-    elif topic == 'connections':
-        # Обработка соединений с медицинскими учреждениями
-        state = message.get('state')
-        connection_id = message.get('connection_id')
-        their_label = message.get('their_label')
-        
-        if state == 'request':
-            # Автоматически принимаем запросы на соединение от зарегистрированных учреждений
-            if their_label in [inst['name'] for inst in REGISTERED_INSTITUTIONS.values()]:
-                accept_connection(connection_id)
+    if topic == 'connections':
+        handle_connection_webhook(message)
+    
+    elif topic == 'basicmessages':
+        handle_basic_message_webhook(message)
+    
+    elif topic == 'endorsements':
+        handle_endorsement_webhook(message)
     
     return jsonify({"status": "processed"}), 200
+
+def handle_connection_webhook(message):
+    """Обработка вебхуков соединений"""
+    state = message.get('state')
+    connection_id = message.get('connection_id')
+    their_label = message.get('their_label', '')
+    their_did = message.get('their_did', '')
+    
+    logging.info(f"[Connection Webhook] State: {state}, Label: {their_label}, DID: {their_did}")
+    
+    if state == 'request':
+        # Получен запрос на соединение от учреждения
+        logging.info(f"📥 Получен запрос на соединение от: {their_label}")
+        
+        # Автоматически принимаем запрос от зарегистрированных учреждений
+        accept_connection(connection_id)
+        
+    elif state == 'response':
+        logging.info(f"✅ Соединение установлено с: {their_label}")
+        
+    elif state == 'active':
+        logging.info(f"🟢 Соединение активно: {their_label}, ID: {connection_id}")
+        
+        # Сохраняем connection_id для этого учреждения
+        if their_did:
+            REGULATOR_CONNECTIONS[their_did] = connection_id
+            logging.info(f"Сохранено соединение для DID {their_did}: {connection_id}")
+    
+    elif state == 'completed':
+        logging.info(f"🏁 Соединение завершено: {connection_id}")
+    
+    elif state == 'abandoned' or state == 'error':
+        error_msg = message.get('error_msg', '')
+        logging.error(f"❌ Проблема с соединением {connection_id}: {state}, {error_msg}")
+
+def handle_basic_message_webhook(message):
+    """Обработка базовых сообщений от учреждений"""
+    content = message.get('content', '')
+    sent_time = message.get('sent_time', '')
+    connection_id = message.get('connection_id', '')
+    
+    try:
+        # Пытаемся разобрать JSON сообщение
+        message_data = json.loads(content)
+        
+        if isinstance(message_data, dict):
+            # Это структурированное сообщение от учреждения
+            message_type = message_data.get('type')
+            
+            if message_type == 'CREDENTIAL_ISSUANCE_REQUEST':
+                # Больница запрашивает разрешение на выпуск нового типа VC
+                handle_credential_issuance_request(connection_id, message_data)
+            
+            elif message_type == 'CREDENTIAL_MODIFICATION_REQUEST':
+                # Больница запрашивает изменение списка VC
+                handle_credential_modification_request(connection_id, message_data)
+            
+            elif message_type == 'STATUS_UPDATE':
+                # Обновление статуса от учреждения
+                logging.info(f"Получено обновление статуса: {message_data}")
+            
+            else:
+                logging.info(f"💬 Получено структурированное сообщение: {message_data}")
+        else:
+            logging.info(f"💬 Базовое сообщение от {connection_id}: {content}")
+            
+    except json.JSONDecodeError:
+        # Не JSON, обычное текстовое сообщение
+        logging.info(f"💬 Текстовое сообщение от {connection_id}: {content}")
+
+def handle_endorsement_webhook(message):
+    """Обработка вебхуков эндоузинга"""
+    state = message.get('state')
+    transaction_id = message.get('transaction_id')
+    
+    logging.info(f"🏛️  Вебхук эндоузинга: {state}, Transaction ID: {transaction_id}")
+    
+    if state == 'request-received':
+        # Получен запрос на подпись транзакции
+        # Можно автоматически подписывать или требовать ручного подтверждения
+        auto_endorse_transaction(transaction_id)
 
 def accept_connection(connection_id):
     """Принять соединение с учреждением"""
@@ -384,11 +402,28 @@ def accept_connection(connection_id):
             json={}
         )
         if response.status_code == 200:
-            logging.info(f"Соединение {connection_id} принято")
+            logging.info(f"✅ Соединение {connection_id} принято")
             return True
+        else:
+            logging.error(f"❌ Ошибка при принятии соединения: {response.text}")
     except Exception as e:
-        logging.error(f"Ошибка при принятии соединения: {e}")
+        logging.error(f"❌ Исключение при принятии соединения: {e}")
     return False
+
+def auto_endorse_transaction(transaction_id):
+    """Автоматически подписать транзакцию учреждения"""
+    try:
+        response = requests.post(
+            f"{AGENT_ADMIN_URL}/endorse-transaction/{transaction_id}/endorse",
+            headers=HEADERS,
+            json={}
+        )
+        if response.status_code == 200:
+            logging.info(f"✅ Транзакция {transaction_id} подписана регулятором")
+        else:
+            logging.error(f"❌ Ошибка при подписании транзакции: {response.text}")
+    except Exception as e:
+        logging.error(f"❌ Исключение при подписании транзакции: {e}")
 
 @app.route('/register-institution', methods=['POST'])
 def register_institution():
@@ -415,7 +450,7 @@ def register_institution():
         did_result = register_institution_did(
             seed=did_seed,
             alias=data['institution_name'],
-            role="ENDORSER"  # Больницы могут быть эндоузерами для своих транзакций
+            role="ENDORSER"
         )
         
         if not did_result:
@@ -432,9 +467,10 @@ def register_institution():
             'did': institution_did,
             'address': data.get('address', ''),
             'status': 'ACTIVE',
-            'allowed_credentials': [],  # Пока нет разрешенных типов VC
+            'allowed_credentials': [],
             'registered_at': datetime.now().isoformat(),
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now().isoformat(),
+            'connection_id': None  # Будет установлено при подключении
         }
         
         logging.info(f"Зарегистрировано новое учреждение: {data['institution_name']}, DID: {institution_did}")
@@ -445,7 +481,7 @@ def register_institution():
             'institution_id': institution_id,
             'did': institution_did,
             'seed': did_seed,
-            'instructions': 'Используйте этот DID для настройки вашего агента'
+            'instructions': 'Используйте этот DID для настройки вашего агента. Отправьте приглашение регулятору для установления соединения.'
         }), 200
         
     except Exception as e:
@@ -519,14 +555,6 @@ def get_registered_institutions():
     
     return jsonify(institutions_list), 200
 
-@app.route('/institutions/<institution_id>', methods=['GET'])
-def get_institution_details(institution_id):
-    """Получение детальной информации об учреждении"""
-    if institution_id not in REGISTERED_INSTITUTIONS:
-        return jsonify({"error": "Учреждение не найдено"}), 404
-    
-    return jsonify(REGISTERED_INSTITUTIONS[institution_id]), 200
-
 @app.route('/request-credential-issuance', methods=['POST'])
 def request_credential_issuance():
     """
@@ -592,17 +620,9 @@ def get_credential_issuance_requests():
     requests_list = list(CREDENTIAL_ISSUANCE_REQUESTS.values())
     return jsonify(requests_list), 200
 
-@app.route('/credential-issuance-requests/<request_id>', methods=['GET'])
-def get_credential_request_details(request_id):
-    """Получение детальной информации о заявке"""
-    if request_id not in CREDENTIAL_ISSUANCE_REQUESTS:
-        return jsonify({"error": "Заявка не найдена"}), 404
-    
-    return jsonify(CREDENTIAL_ISSUANCE_REQUESTS[request_id]), 200
-
 @app.route('/credential-issuance-requests/<request_id>/approve', methods=['POST'])
 def approve_credential_request(request_id):
-    """Одобрение заявки на выпуск VC"""
+    """Одобрение заявки на выпуск VC с отправкой уведомления через агента"""
     if request_id not in CREDENTIAL_ISSUANCE_REQUESTS:
         return jsonify({"error": "Заявка не найдена"}), 404
     
@@ -629,27 +649,32 @@ def approve_credential_request(request_id):
     
     logging.info(f"Заявка {request_id} одобрена. Учреждение {hospital_id} теперь может выпускать {credential_type}")
     
-    # Отправка уведомления больнице (в реальной системе через webhook или сообщение)
-    notify_hospital(
-        hospital_id,
-        'CREDENTIAL_ISSUANCE_APPROVED',
-        {
+    # Отправка уведомления больнице через агента
+    notification_sent = send_notification_to_hospital(
+        hospital_did=request_data['hospital_did'],
+        notification_type='CREDENTIAL_ISSUANCE_APPROVED',
+        data={
             'request_id': request_id,
             'credential_type': credential_type,
-            'decision_reason': decision_reason
+            'decision_reason': decision_reason,
+            'allowed_credentials': REGISTERED_INSTITUTIONS[hospital_id]['allowed_credentials']
         }
     )
+    
+    if not notification_sent:
+        logging.warning(f"Не удалось отправить уведомление больнице {hospital_id}")
     
     return jsonify({
         'success': True,
         'message': 'Заявка одобрена',
         'request_id': request_id,
-        'credential_type': credential_type
+        'credential_type': credential_type,
+        'notification_sent': notification_sent
     }), 200
 
 @app.route('/credential-issuance-requests/<request_id>/reject', methods=['POST'])
 def reject_credential_request(request_id):
-    """Отклонение заявки на выпуск VC"""
+    """Отклонение заявки на выпуск VC с отправкой уведомления через агента"""
     if request_id not in CREDENTIAL_ISSUANCE_REQUESTS:
         return jsonify({"error": "Заявка не найдена"}), 404
     
@@ -665,12 +690,12 @@ def reject_credential_request(request_id):
     
     logging.info(f"Заявка {request_id} отклонена. Причина: {decision_reason}")
     
-    # Отправка уведомления больнице
+    # Отправка уведомления больнице через агента
     request_data = CREDENTIAL_ISSUANCE_REQUESTS[request_id]
-    notify_hospital(
-        request_data['hospital_id'],
-        'CREDENTIAL_ISSUANCE_REJECTED',
-        {
+    notification_sent = send_notification_to_hospital(
+        hospital_did=request_data['hospital_did'],
+        notification_type='CREDENTIAL_ISSUANCE_REJECTED',
+        data={
             'request_id': request_id,
             'decision_reason': decision_reason
         }
@@ -679,8 +704,207 @@ def reject_credential_request(request_id):
     return jsonify({
         'success': True,
         'message': 'Заявка отклонена',
-        'request_id': request_id
+        'request_id': request_id,
+        'notification_sent': notification_sent
     }), 200
+
+def send_notification_to_hospital(hospital_did, notification_type, data):
+    """
+    Отправка уведомления больнице через базовое сообщение агента
+    """
+    try:
+        # Проверяем, есть ли активное соединение с больницей
+        connection_id = REGULATOR_CONNECTIONS.get(hospital_did)
+        
+        if not connection_id:
+            logging.warning(f"Нет активного соединения с больницей DID: {hospital_did}")
+            
+            # Пытаемся найти учреждение и его connection_id
+            for inst_id, inst_data in REGISTERED_INSTITUTIONS.items():
+                if inst_data['did'] == hospital_did and inst_data.get('connection_id'):
+                    connection_id = inst_data['connection_id']
+                    REGULATOR_CONNECTIONS[hospital_did] = connection_id
+                    break
+            
+            if not connection_id:
+                logging.error(f"Не найдено соединение для больницы {hospital_did}")
+                return False
+        
+        # Формируем структурированное сообщение
+        notification_message = {
+            'type': notification_type,
+            'from': 'REGULATOR',
+            'timestamp': datetime.now().isoformat(),
+            'data': data
+        }
+        
+        # Отправляем базовое сообщение через агента
+        response = requests.post(
+            f"{AGENT_ADMIN_URL}/connections/{connection_id}/send-message",
+            headers=HEADERS,
+            json={
+                "content": json.dumps(notification_message, ensure_ascii=False)
+            }
+        )
+        
+        if response.status_code == 200:
+            logging.info(f"✅ Уведомление отправлено больнице {hospital_did}: {notification_type}")
+            return True
+        else:
+            logging.error(f"❌ Ошибка отправки уведомления: {response.text}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"❌ Исключение при отправке уведомления: {e}")
+        return False
+
+def handle_credential_issuance_request(connection_id, message_data):
+    """
+    Обработка запроса на выпуск VC, полученного через базовое сообщение
+    """
+    try:
+        hospital_did = message_data.get('hospital_did')
+        credential_type = message_data.get('credential_type')
+        schema_data = message_data.get('schema_data')
+        
+        if not all([hospital_did, credential_type, schema_data]):
+            logging.error(f"Неполные данные в запросе на выпуск VC: {message_data}")
+            return
+        
+        # Поиск учреждения по DID
+        hospital = None
+        hospital_id = None
+        for inst_id, inst_data in REGISTERED_INSTITUTIONS.items():
+            if inst_data['did'] == hospital_did:
+                hospital = inst_data
+                hospital_id = inst_id
+                break
+        
+        if not hospital:
+            logging.error(f"Учреждение с DID {hospital_did} не найдено")
+            # Отправляем сообщение об ошибке
+            send_response_message(connection_id, {
+                'type': 'ERROR',
+                'message': 'Учреждение не зарегистрировано',
+                'hospital_did': hospital_did
+            })
+            return
+        
+        # Создание заявки
+        request_id = str(uuid.uuid4())
+        CREDENTIAL_ISSUANCE_REQUESTS[request_id] = {
+            'request_id': request_id,
+            'hospital_id': hospital_id,
+            'hospital_did': hospital_did,
+            'hospital_name': hospital['name'],
+            'credential_type': credential_type,
+            'schema_data': schema_data,
+            'status': 'pending',
+            'submitted_at': datetime.now().isoformat(),
+            'decision_date': None,
+            'decision_reason': None
+        }
+        
+        # Сохраняем connection_id для учреждения
+        REGISTERED_INSTITUTIONS[hospital_id]['connection_id'] = connection_id
+        REGULATOR_CONNECTIONS[hospital_did] = connection_id
+        
+        logging.info(f"Получена заявка на выпуск VC через сообщение: {request_id} от {hospital['name']}")
+        
+        # Отправляем подтверждение получения заявки
+        send_response_message(connection_id, {
+            'type': 'CREDENTIAL_ISSUANCE_REQUEST_RECEIVED',
+            'request_id': request_id,
+            'status': 'pending',
+            'message': 'Заявка принята на рассмотрение',
+            'estimated_review_time': '3 рабочих дня'
+        })
+        
+    except Exception as e:
+        logging.error(f"Ошибка при обработке запроса на выпуск VC: {e}")
+
+def send_response_message(connection_id, message_data):
+    """Отправка ответного сообщения учреждению"""
+    try:
+        response = requests.post(
+            f"{AGENT_ADMIN_URL}/connections/{connection_id}/send-message",
+            headers=HEADERS,
+            json={
+                "content": json.dumps(message_data, ensure_ascii=False)
+            }
+        )
+        
+        if response.status_code == 200:
+            logging.info(f"✅ Ответное сообщение отправлено на соединение {connection_id}")
+            return True
+        else:
+            logging.error(f"❌ Ошибка отправки ответного сообщения: {response.text}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"❌ Исключение при отправке ответного сообщения: {e}")
+        return False
+
+def handle_credential_modification_request(connection_id, message_data):
+    """
+    Обработка запроса на изменение списка VC, полученного через базовое сообщение
+    """
+    try:
+        hospital_did = message_data.get('hospital_did')
+        action = message_data.get('action')
+        credential_types = message_data.get('credential_types')
+        
+        if not all([hospital_did, action, credential_types]):
+            logging.error(f"Неполные данные в запросе на изменение VC: {message_data}")
+            return
+        
+        # Поиск учреждения
+        hospital = None
+        hospital_id = None
+        for inst_id, inst_data in REGISTERED_INSTITUTIONS.items():
+            if inst_data['did'] == hospital_did:
+                hospital = inst_data
+                hospital_id = inst_id
+                break
+        
+        if not hospital:
+            logging.error(f"Учреждение с DID {hospital_did} не найдено")
+            send_response_message(connection_id, {
+                'type': 'ERROR',
+                'message': 'Учреждение не зарегистрировано'
+            })
+            return
+        
+        # Создание заявки на изменение
+        modification_id = str(uuid.uuid4())
+        CREDENTIAL_MODIFICATION_REQUESTS[modification_id] = {
+            'modification_id': modification_id,
+            'hospital_id': hospital_id,
+            'hospital_name': hospital['name'],
+            'action': action,
+            'credential_types': credential_types,
+            'status': 'pending',
+            'submitted_at': datetime.now().isoformat(),
+            'decision_date': None,
+            'decision_reason': None
+        }
+        
+        # Сохраняем connection_id
+        REGISTERED_INSTITUTIONS[hospital_id]['connection_id'] = connection_id
+        REGULATOR_CONNECTIONS[hospital_did] = connection_id
+        
+        logging.info(f"Получен запрос на изменение VC через сообщение: {modification_id} от {hospital['name']}")
+        
+        # Отправляем подтверждение
+        send_response_message(connection_id, {
+            'type': 'CREDENTIAL_MODIFICATION_REQUEST_RECEIVED',
+            'modification_id': modification_id,
+            'status': 'pending',
+            'message': 'Запрос на изменение принят на рассмотрение'
+        })
+        
+    except Exception as e:
+        logging.error(f"Ошибка при обработке запроса на изменение VC: {e}")
 
 @app.route('/request-credential-modification', methods=['POST'])
 def request_credential_modification():
@@ -747,7 +971,7 @@ def get_credential_modification_requests():
 
 @app.route('/credential-modification-requests/<modification_id>/approve', methods=['POST'])
 def approve_modification_request(modification_id):
-    """Одобрение запроса на изменение VC"""
+    """Одобрение запроса на изменение VC с уведомлением через агента"""
     if modification_id not in CREDENTIAL_MODIFICATION_REQUESTS:
         return jsonify({"error": "Запрос не найден"}), 404
     
@@ -776,15 +1000,29 @@ def approve_modification_request(modification_id):
     
     logging.info(f"Запрос на изменение {modification_id} одобрен")
     
+    # Отправка уведомления больнице
+    hospital_did = REGISTERED_INSTITUTIONS[hospital_id]['did']
+    notification_sent = send_notification_to_hospital(
+        hospital_did=hospital_did,
+        notification_type='CREDENTIAL_MODIFICATION_APPROVED',
+        data={
+            'modification_id': modification_id,
+            'action': action,
+            'credential_types': credential_types,
+            'allowed_credentials': REGISTERED_INSTITUTIONS[hospital_id]['allowed_credentials']
+        }
+    )
+    
     return jsonify({
         'success': True,
         'message': 'Запрос на изменение одобрен',
-        'modification_id': modification_id
+        'modification_id': modification_id,
+        'notification_sent': notification_sent
     }), 200
 
 @app.route('/credential-modification-requests/<modification_id>/reject', methods=['POST'])
 def reject_modification_request(modification_id):
-    """Отклонение запроса на изменение VC"""
+    """Отклонение запроса на изменение VC с уведомлением через агента"""
     if modification_id not in CREDENTIAL_MODIFICATION_REQUESTS:
         return jsonify({"error": "Запрос не найден"}), 404
     
@@ -798,15 +1036,30 @@ def reject_modification_request(modification_id):
     
     logging.info(f"Запрос на изменение {modification_id} отклонен")
     
+    # Отправка уведомления больнице
+    request_data = CREDENTIAL_MODIFICATION_REQUESTS[modification_id]
+    hospital_id = request_data['hospital_id']
+    hospital_did = REGISTERED_INSTITUTIONS[hospital_id]['did']
+    
+    notification_sent = send_notification_to_hospital(
+        hospital_did=hospital_did,
+        notification_type='CREDENTIAL_MODIFICATION_REJECTED',
+        data={
+            'modification_id': modification_id,
+            'decision_reason': decision_reason
+        }
+    )
+    
     return jsonify({
         'success': True,
         'message': 'Запрос на изменение отклонен',
-        'modification_id': modification_id
+        'modification_id': modification_id,
+        'notification_sent': notification_sent
     }), 200
 
 @app.route('/institutions/<institution_id>/suspend', methods=['POST'])
 def suspend_institution(institution_id):
-    """Приостановка деятельности учреждения"""
+    """Приостановка деятельности учреждения с уведомлением"""
     if institution_id not in REGISTERED_INSTITUTIONS:
         return jsonify({"error": "Учреждение не найдено"}), 404
     
@@ -819,15 +1072,27 @@ def suspend_institution(institution_id):
     
     logging.warning(f"Учреждение {institution_id} приостановлено. Причина: {reason}")
     
+    # Отправка уведомления
+    hospital_did = REGISTERED_INSTITUTIONS[institution_id]['did']
+    notification_sent = send_notification_to_hospital(
+        hospital_did=hospital_did,
+        notification_type='INSTITUTION_SUSPENDED',
+        data={
+            'reason': reason,
+            'suspended_at': REGISTERED_INSTITUTIONS[institution_id]['suspended_at']
+        }
+    )
+    
     return jsonify({
         'success': True,
         'message': 'Учреждение приостановлено',
-        'institution_id': institution_id
+        'institution_id': institution_id,
+        'notification_sent': notification_sent
     }), 200
 
 @app.route('/institutions/<institution_id>/activate', methods=['POST'])
 def activate_institution(institution_id):
-    """Активация приостановленного учреждения"""
+    """Активация приостановленного учреждения с уведомлением"""
     if institution_id not in REGISTERED_INSTITUTIONS:
         return jsonify({"error": "Учреждение не найдено"}), 404
     
@@ -841,27 +1106,20 @@ def activate_institution(institution_id):
     
     logging.info(f"Учреждение {institution_id} активировано")
     
+    # Отправка уведомления
+    hospital_did = REGISTERED_INSTITUTIONS[institution_id]['did']
+    notification_sent = send_notification_to_hospital(
+        hospital_did=hospital_did,
+        notification_type='INSTITUTION_ACTIVATED',
+        data={'activated_at': datetime.now().isoformat()}
+    )
+    
     return jsonify({
         'success': True,
         'message': 'Учреждение активировано',
-        'institution_id': institution_id
+        'institution_id': institution_id,
+        'notification_sent': notification_sent
     }), 200
-
-def notify_hospital(hospital_id, notification_type, data):
-    """
-    Отправка уведомления больнице
-    В реальной системе это может быть webhook или сообщение через агента
-    """
-    try:
-        if hospital_id in REGISTERED_INSTITUTIONS:
-            hospital = REGISTERED_INSTITUTIONS[hospital_id]
-            logging.info(f"Уведомление отправлено {hospital['name']}: {notification_type}")
-            
-            # Здесь можно добавить реальную отправку уведомления
-            # Например, через административный API агента больницы
-            
-    except Exception as e:
-        logging.error(f"Ошибка при отправке уведомления: {e}")
 
 @app.route('/verify-institution-permission', methods=['POST'])
 def verify_institution_permission():
@@ -916,6 +1174,37 @@ def verify_institution_permission():
         logging.error(f"Ошибка при проверке разрешений: {str(e)}")
         return jsonify({"error": f"Внутренняя ошибка: {str(e)}"}), 500
 
+@app.route('/send-test-notification', methods=['POST'])
+def send_test_notification():
+    """Эндпоинт для отправки тестового уведомления больнице"""
+    try:
+        data = request.json
+        hospital_did = data.get('hospital_did')
+        message_type = data.get('message_type', 'TEST_NOTIFICATION')
+        
+        if not hospital_did:
+            return jsonify({"error": "Не указан DID больницы"}), 400
+        
+        notification_sent = send_notification_to_hospital(
+            hospital_did=hospital_did,
+            notification_type=message_type,
+            data={
+                'test': True,
+                'timestamp': datetime.now().isoformat(),
+                'message': 'Это тестовое уведомление от регулятора'
+            }
+        )
+        
+        return jsonify({
+            'success': notification_sent,
+            'message': 'Тестовое уведомление отправлено' if notification_sent else 'Не удалось отправить уведомление',
+            'hospital_did': hospital_did
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Ошибка при отправке тестового уведомления: {e}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.INFO,
@@ -929,6 +1218,7 @@ if __name__ == '__main__':
     print("🏛️  Запуск контроллера государственного регулятора...")
     print(f"📊 Панель управления доступна по адресу: http://localhost:8070")
     print(f"🔗 Административный API агента: {AGENT_ADMIN_URL}")
+    print(f"📨 Вебхуки агента настраиваются на: http://localhost:8070/webhooks/topic/<topic>/")
     
     # Инициализация тестовых данных
     REGISTERED_INSTITUTIONS['test_hospital_001'] = {
@@ -941,7 +1231,8 @@ if __name__ == '__main__':
         'status': 'ACTIVE',
         'allowed_credentials': ['MEDICAL_RECORD'],
         'registered_at': datetime.now().isoformat(),
-        'last_updated': datetime.now().isoformat()
+        'last_updated': datetime.now().isoformat(),
+        'connection_id': None
     }
     
     app.run(host='0.0.0.0', port=8070, debug=True)
