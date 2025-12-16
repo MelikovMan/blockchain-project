@@ -50,6 +50,8 @@ services:
     ports:
       - "8040:8040"  # Для сообщений между агентами
       - "8041:8041"  # Административный API
+    volumes:
+      - regulator_wallet_data:/home/indy/.indy_client/wallet
     command: >
       start
       --endpoint http://regulator-agent:8040
@@ -58,3 +60,5 @@ services:
       --auto-accept-requests
       --endorser-protocol-role endorser
       --auto-endorse-transactions
+volumes:
+ regulator_wallet_data:
