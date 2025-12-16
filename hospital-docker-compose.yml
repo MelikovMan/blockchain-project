@@ -40,3 +40,4 @@ services:
       --auto-accept-invites
       --auto-accept-requests
       --auto-store-credential
+      --preserve-exchange-records

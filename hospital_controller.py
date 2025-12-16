@@ -184,7 +184,7 @@ def handle_present_proof_webhook(message):
     """Обработка вебхуков верификации доказательств"""
     state = message.get('state')
     pres_ex_id = message.get('presentation_exchange_id')
-    
+    connection_id = message.get('connection_id', '')
     if state == 'request_sent':
         logging.info(f"📤 Запрос на доказательство отправлен: {pres_ex_id}")
     
@@ -197,11 +197,34 @@ def handle_present_proof_webhook(message):
         logging.info(f"✅ Доказательство верифицировано: {pres_ex_id}")
         # Извлекаем раскрытые атрибуты
         logging.info(message)
-        revealed_attrs = message.get('revealed_attrs', {})
-        if revealed_attrs:
-            logging.info(f"📊 Раскрытые данные: {json.dumps(revealed_attrs, indent=2)}")
-            # Сохраняем в журнал доступа
-            log_access_request(pres_ex_id, revealed_attrs)
+        try:
+            detail_resp = requests.get(
+                f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}",
+                headers=HEADERS
+            )
+            
+            if detail_resp.status_code == 200:
+                presentation_details = detail_resp.json()
+                
+                # Теперь извлекаем revealed_attrs из деталей
+                revealed_attrs = presentation_details.get('revealed_attrs', {})
+                
+                if revealed_attrs:
+                    logging.info(f"📊 Раскрытые данные: {json.dumps(revealed_attrs, indent=2)}")
+                    # Сохраняем в журнал доступа
+                    log_access_request(pres_ex_id, revealed_attrs)
+                    
+                    # Обрабатываем медицинские данные
+                    #process_medical_data_from_presentation(pres_ex_id, revealed_attrs, connection_id)
+                else:
+                    logging.warning(f"⚠️ Нет раскрытых атрибутов в верифицированной презентации {pres_ex_id}")
+                    
+                    # Попробуем получить данные через API credentials
+                    get_presentation_credentials_data(pres_ex_id, connection_id)
+            else:
+                logging.error(f"❌ Ошибка получения деталей презентации: {detail_resp.text}")
+        except Exception as e:
+            logging.error(f"❌ Исключение при обработке верифицированной презентации: {e}")
     
     elif state == 'abandoned' or state == 'error':
         logging.error(f"❌ Ошибка в процессе верификации {pres_ex_id}: {state}")
@@ -231,6 +254,45 @@ def handle_problem_report_webhook(message):
     logging.error(f"🚨 Отчет об ошибке от {connection_id}: {problem_code} - {explain}")
 
 # Вспомогательные функции
+def get_presentation_credentials_data(pres_ex_id, connection_id):
+    """Получает данные credentials через API для конкретной презентации"""
+    try:
+        # Получаем список credentials для этой презентации
+        creds_resp = requests.get(
+            f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/credentials",
+            headers=HEADERS
+        )
+        
+        if creds_resp.status_code == 200:
+            credentials_list = creds_resp.json()
+            logging.info(f"Найдено credentials для презентации {pres_ex_id}: {len(credentials_list)}")
+            
+            # Если есть credentials, можем получить их детали
+            if credentials_list:
+                for cred_data in credentials_list:
+                    cred_info = cred_data.get('cred_info', {})
+                    cred_attrs = cred_info.get('attrs', {})
+                    
+                    if cred_attrs:
+                        logging.info(f"Атрибуты из credential: {json.dumps(cred_attrs, indent=2)}")
+                        
+                        # Извлекаем медицинские данные
+                        #medical_data = extract_medical_data_from_attrs(cred_attrs)
+                        
+                        #if medical_data:
+                            # Сохраняем данные
+                            #save_medical_data_access(pres_ex_id, connection_id, medical_data)
+                            #return medical_data
+            
+            # Если не нашли через credentials API, пробуем получить через presentation exchange
+            #eturn get_presentation_exchange_data(pres_ex_id, connection_id)
+        else:
+            logging.error(f"Ошибка получения credentials: {creds_resp.text}")
+            return None
+            
+    except Exception as e:
+        logging.error(f"Исключение при получении данных credentials: {e}")
+        return None
 def send_credential_offer(cred_ex_id):
     """Отправляет оффер учетных данных в ответ на предложение"""
     try:
