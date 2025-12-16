@@ -66,9 +66,13 @@ def handle_webhooks(topic):
             cred_ex_id = message['credential_exchange_id']
             logging.info(f"📄 Получено предложение справки. ID: {cred_ex_id}")
             # Автоматически принимаем оффер
-            requests.post(f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-request", 
+            resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-request", 
                          headers=HEADERS, json={})
-        
+            if resp.status_code == 200:
+                presentation_request = resp.json().get('presentation_request')
+            else:
+                logging.error(f"Не удалось получить запрос на презентацию {cred_ex_id}: {resp.text}")
+                return 400
         elif message['state'] == 'credential_received':
             logging.info("🎉 Медицинская справка успешно сохранена в кошельке!")
     
@@ -170,5 +174,5 @@ def get_credentials():
     return jsonify([])
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(filename='logs/patient.log',level=logging.INFO,encoding='utf-8')
     app.run(port=8060, debug=True)

@@ -196,6 +196,7 @@ def handle_present_proof_webhook(message):
     elif state == 'verified':
         logging.info(f"✅ Доказательство верифицировано: {pres_ex_id}")
         # Извлекаем раскрытые атрибуты
+        logging.info(message)
         revealed_attrs = message.get('revealed_attrs', {})
         if revealed_attrs:
             logging.info(f"📊 Раскрытые данные: {json.dumps(revealed_attrs, indent=2)}")
@@ -430,6 +431,7 @@ def verify_emergency_proof():
 CRED_DEF_ID = None
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='logs/hospital.log', level=logging.INFO,encoding='utf-8')
     # При старте регистрируем схему в блокчейне (в продакшене это делается отдельно)
     if (requests.get(f"{AGENT_ADMIN_URL}/wallet/did",headers=HEADERS).json()["results"] and requests.get(f"{AGENT_ADMIN_URL}/wallet/did/public",headers=HEADERS).json()["result"]):
         print("DiD найдены в кошельке")

@@ -17,7 +17,6 @@ services:
       - ACAPY_AUTO_PROVISION=true
       - ACAPY_WALLET_ALLOW_INSECURE_SEED=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
-      - ACAPY_AUTO_ACCEPT_REQUESTS=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
       
       # Webhook для получения транзакций на подпись от регулятора

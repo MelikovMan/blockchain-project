@@ -118,8 +118,8 @@ class MedicalScenarioRunner:
             await asyncio.sleep(5)
             pres_ex_id = proof_resp.json()['presentation_exchange_id']
             print(f"ID презентации: {pres_ex_id}")
-            status_resp = requests.post(
-                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}/verify-presentation",
+            status_resp = requests.get(
+                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}",
                 headers=self.hospital_headers
             )
             if status_resp.status_code != 200:
