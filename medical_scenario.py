@@ -127,7 +127,7 @@ class MedicalScenarioRunner:
                 return
             if status_resp.json()['state'] == 'verified':
                 print("   🩺 Данные верифицированы! Врач получил группу крови пациента.")
-                revealed_attrs = status_resp.json().get('revealed_attrs', {})
+                revealed_attrs = status_resp.json()["presentation"]["requested_proof"].get('revealed_attrs', {})
                 if revealed_attrs:
                     print(f"   📊 Полученные данные: {revealed_attrs}")
             else: 

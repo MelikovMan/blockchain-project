@@ -204,7 +204,7 @@ def handle_present_proof_webhook(message):
             )
             
             if detail_resp.status_code == 200:
-                presentation_details = detail_resp.json()
+                presentation_details = detail_resp.json()["presentation"]
                 
                 # Теперь извлекаем revealed_attrs из деталей
                 proof = presentation_details.get('requested_proof', {})
