@@ -4,6 +4,7 @@
 # Запуск тестового блокчейна Indy
 git clone https://github.com/bcgov/von-network
 cd von-network
+./manage build (один раз)
 ./manage start
 
 # В разных терминалах запускаем агентов
