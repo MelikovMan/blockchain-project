@@ -48,7 +48,7 @@ def create_schema_and_cred_def():
     """
     
     schema_body = {
-        "schema_name": "HospitalMedicalRecord333",
+        "schema_name": "HospitalMedicalRecord66",
         "schema_version": "1.0.5",
         "attributes": [
             "full_name",
@@ -59,7 +59,7 @@ def create_schema_and_cred_def():
         ]
     }
     # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord333",headers=HEADERS)
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord66",headers=HEADERS)
     if schema_find.json()["schema_ids"]:
         print("Схема уже существует")
         schema_result = schema_find.json()
@@ -74,7 +74,7 @@ def create_schema_and_cred_def():
         schema_result = schema_resp.json()
         schema_id = schema_result["schema_id"]
     # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord333", headers=HEADERS)
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord66", headers=HEADERS)
     if cred_def_find.json()["credential_definition_ids"]:
         print("Определение VC уже существует")
         cred_result = cred_def_find.json()
@@ -103,10 +103,10 @@ def handle_connection_webhook(message):
     
     elif state == 'request':
         logging.info(f"📥 Получен запрос на соединение от: {their_label}, ID: {connection_id}")
-        # Автоматически принимаем запрос на соединение
+        # Автоматически принимаем запрос на соединение с использованием DID Exchange
         try:
             accept_response = requests.post(
-                f"{AGENT_ADMIN_URL}/connections/{connection_id}/accept-request",
+                f"{AGENT_ADMIN_URL}/didexchange/{connection_id}/accept-request",
                 headers=HEADERS,
                 json={}
             )
@@ -490,7 +490,40 @@ def verify_emergency_proof():
     # 4. Ответ содержит идентификатор презентации, статус которой нужно проверять асинхронно
     presentation_exchange_id = proof_resp.json()["presentation_exchange_id"]
     return jsonify({"presentation_exchange_id": presentation_exchange_id}), 200
-
+@app.route('/create-invitation', methods=['POST'])
+def create_invitation():
+    """
+    Создание приглашения с использованием Qualified DID (did:peer:4)
+    """
+    # Параметры запроса
+    use_did_method = request.json.get('use_did_method', 'did:peer:4')
+    handshake_protocols = request.json.get('handshake_protocols', 
+                                          ['"https://didcomm.org/didexchange/1.1"'])
+    
+    invitation_body = {
+        "use_did_method": use_did_method,
+        "handshake_protocols": handshake_protocols,
+        "alias": "City Hospital",
+        "auto_accept": True
+    }
+    
+    # Создание OOB приглашения
+    invitation_resp = requests.post(
+        f"{AGENT_ADMIN_URL}/out-of-band/create-invitation",
+        headers=HEADERS,
+        json=invitation_body
+    )
+    
+    if invitation_resp.status_code != 200:
+        logging.error(f"Ошибка создания приглашения: {invitation_resp.text}")
+        return jsonify({"error": "Не удалось создать приглашение"}), 500
+    
+    invitation_data = invitation_resp.json()
+    return jsonify({
+        "invitation": invitation_data.get("invitation"),
+        "invitation_url": invitation_data.get("invitation_url"),
+        "connection_id": invitation_data.get("connection_id")
+    }), 200
 # Глобальная переменная для ID определения учетных данных
 CRED_DEF_ID = None
 

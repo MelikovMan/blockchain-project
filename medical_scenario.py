@@ -16,47 +16,78 @@ class MedicalScenarioRunner:
     async def run_full_scenario(self):
         """Запуск полного медицинского сценария"""
         
-        # ЭТАП 1: Больница создает приглашение для пациента
-        print("1. 🏥 Больница создает приглашение для пациента...")
+    # ЭТАП 1: Больница создает приглашение с использованием did:peer:4
+        print("1. 🏥 Больница создает приглашение для пациента с использованием did:peer:4...")
+    
         invitation_resp = requests.post(
-            f"{self.hospital_admin}/connections/create-invitation",
+            f"{self.hospital_admin}/out-of-band/create-invitation",
             headers=self.hospital_headers,
-            json={"auto_accept": True}
+            json={
+            "use_did_method": "did:peer:4",
+            "handshake_protocols": ["https://didcomm.org/didexchange/1.1"],
+            "alias": "City Hospital",
+            "auto_accept": True
+            }
         )
+    
+        if invitation_resp.status_code != 200:
+            print(f"Ошибка создания приглашения: {invitation_resp.text}")
+            return
+    
         invitation = invitation_resp.json()['invitation']
-        print(f"   Приглашение создано: {invitation['@id']}")
-        
-        # ЭТАП 2: Пациент принимает приглашение
-        print("2. 👤 Пациент принимает приглашение...")
+        print(f"   Приглашение с did:peer:4 создано: {invitation['@id']}")
+        # ЭТАП 2: Пациент принимает приглашение через DID Exchange
+        print("2. 👤 Пациент принимает приглашение через DID Exchange...")
+    
         receive_resp = requests.post(
-            f"{self.patient_admin}/connections/receive-invitation",
+            f"{self.patient_admin}/out-of-band/receive-invitation",
             headers=self.patient_headers,
             json=invitation
         )
+    
         if receive_resp.status_code != 200:
             print(f"Ошибка принятия приглашения: {receive_resp.text}")
             return
+    
         patient_connection_id = receive_resp.json()['connection_id']
-        print(f"Id соедиения пациента: {patient_connection_id}")
-        # Ждем установления соединения
-
+        print(f"   ID соединения пациента: {patient_connection_id}")
+    
+    # Ждем установления соединения
+        print("   ⏳ Ожидание установления соединения через DID Exchange...")
+        await asyncio.sleep(3)
+    
+    # Получаем ID соединения со стороны больницы
         hospital_id_resp = requests.get(
             f"{self.hospital_admin}/connections",
             headers=self.hospital_headers,
-        )
+    )
+    
         if hospital_id_resp.status_code != 200:
-            print(f"Ошибка получения id: {hospital_id_resp.text}")
+            print(f"Ошибка получения соединений больницы: {hospital_id_resp.text}")
             return
-        hospital_connection_id = hospital_id_resp.json()['results'][0]['connection_id']
-        print(f"Id соедиения больницы: {hospital_connection_id}")
-        #req_resp = requests.post(
-        #    f"{self.hospital_admin}/connections/{hospital_connection_id}/accept-request",
-        #    headers=self.hospital_headers,
-        #)
-        #if req_resp.status_code != 200:
-        #    print(f"Ошибка установки соедиения: {req_resp.text}")
-        #    return
-        #await asyncio.sleep(5)
+    
+        connections = hospital_id_resp.json().get('results', [])
+        hospital_connection_id = connections[0]['connection_id'] if connections else None
+        print(f"   ID соединения больницы: {hospital_connection_id}")
+    
+        if not hospital_connection_id:
+            print("❌ Не удалось найти активное соединение")
+            return
+    
+    # Проверяем состояние соединения
+        connection_resp = requests.get(
+            f"{self.hospital_admin}/connections/{hospital_connection_id}",
+            headers=self.hospital_headers
+        )
+    
+        if connection_resp.status_code == 200:
+            connection_state = connection_resp.json().get('state')
+            print(f"   Состояние соединения: {connection_state}")
+        
+            if connection_state not in ['active', 'response', 'completed']:
+                print("⚠️  Соединение еще не готово, ожидаем...")
+            await asyncio.sleep(2)
+    
         
         # ЭТАП 3: Больница выпускает медицинскую справку
         print("3. 📋 Больница выпускает медицинскую справку...")
@@ -72,7 +103,7 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default"  # Должен быть реальный ID
+            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:29:default"  # Должен быть реальный ID
         }
         
         issue_resp = requests.post(
@@ -98,7 +129,7 @@ class MedicalScenarioRunner:
                 "requested_attributes": {
                     "blood_attr": {
                         "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default"}]
+                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:29:default"}]
                     }
                 },
                 "requested_predicates":{}
