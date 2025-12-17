@@ -113,7 +113,6 @@ def handle_webhooks(topic):
                     "requested_predicates":{},
                     "self_attested_attributes":{},
                 }
-                print(f"Тело ответа: {emergency_response}")
                 requesting = requests.post(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/send-presentation",
                              headers=HEADERS, json=emergency_response)
                 if requesting.status_code != 200:
