@@ -2,6 +2,7 @@ import requests
 import json
 import logging
 from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
@@ -494,6 +495,7 @@ def verify_emergency_proof():
 CRED_DEF_ID = None
 
 if __name__ == '__main__':
+    os.makedirs('logs', exist_ok=True)
     logging.basicConfig(filename='logs/hospital.log', level=logging.INFO,encoding='utf-8')
     # При старте регистрируем схему в блокчейне (в продакшене это делается отдельно)
     if (requests.get(f"{AGENT_ADMIN_URL}/wallet/did",headers=HEADERS).json()["results"] and requests.get(f"{AGENT_ADMIN_URL}/wallet/did/public",headers=HEADERS).json()["result"]):

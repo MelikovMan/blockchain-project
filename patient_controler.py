@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from flask import Flask, request, jsonify, render_template_string
+import os
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
@@ -174,5 +175,6 @@ def get_credentials():
     return jsonify([])
 
 if __name__ == '__main__':
+    os.makedirs('logs', exist_ok=True)
     logging.basicConfig(filename='logs/patient.log',level=logging.INFO,encoding='utf-8')
     app.run(port=8060, debug=True)

@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import logging
@@ -1206,6 +1207,7 @@ def send_test_notification():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    os.makedirs('logs', exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
