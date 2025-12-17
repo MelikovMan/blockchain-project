@@ -54,8 +54,24 @@ def handle_webhooks(topic):
     """
     message = request.json
     logging.info(f"[Webhook] Топик: {topic}, Сообщение: {message}")
-    
-    if topic == 'connections':
+    if topic == 'didexchange':
+        # Обработка событий DID Exchange
+        state = message.get('state')
+        connection_id = message.get('connection_id')
+        
+        if state == 'request_received':
+            logging.info(f"📥 Получен запрос на DID Exchange: {connection_id}")
+            # Автоматически принимаем запрос
+            requests.post(
+                f"{AGENT_ADMIN_URL}/didexchange/{connection_id}/accept-request",
+                headers=HEADERS,
+                json={}
+            )
+        elif state == 'response_received':
+            logging.info(f"✅ Ответ на DID Exchange получен: {connection_id}")
+        elif state == 'completed':
+            logging.info(f"🏁 DID Exchange завершен: {connection_id}")
+    elif topic == 'connections':
         # Уведомление об изменении статуса соединения
         if message['state'] == 'response':
             logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
@@ -72,7 +88,7 @@ def handle_webhooks(topic):
                 presentation_request = resp.json().get('presentation_request')
             else:
                 logging.error(f"Не удалось получить запрос на презентацию {cred_ex_id}: {resp.text}")
-                return 400
+                return jsonify({"status": "error"}), 400
         elif message['state'] == 'credential_received':
             logging.info("🎉 Медицинская справка успешно сохранена в кошельке!")
     
@@ -91,7 +107,7 @@ def handle_webhooks(topic):
                     presentation_request = resp.json().get('presentation_request')
                 else:
                     logging.error(f"Не удалось получить запрос на презентацию {pres_ex_id}: {resp.text}")
-                    return 400
+                    return jsonify({"status": "error"}), 400
             if is_emergency_request(presentation_request):
                 emergency_response = {
                     "requested_attributes": {
@@ -127,21 +143,28 @@ def get_credential_id(pres_ex_id):
 
 @app.route('/receive-invitation', methods=['POST'])
 def receive_invitation():
-    """Принять приглашение от больницы для установления соединения"""
+    """Принять приглашение от больницы для установления соединения с использованием DID Exchange"""
     invitation_json = request.form.get('invitation')
     if not invitation_json:
         return "❌ Неверный формат приглашения", 400
+    
     try:
         invitation = json.loads(invitation_json)
     except:
         return "❌ Неверный формат приглашения", 400
     
-    resp = requests.post(f"{AGENT_ADMIN_URL}/connections/receive-invitation", 
-                        headers=HEADERS, json={"invitation": invitation})
+    # Используем DID Exchange для приема приглашения
+    resp = requests.post(
+        f"{AGENT_ADMIN_URL}/out-of-band/receive-invitation", 
+        headers=HEADERS, 
+        json=invitation
+    )
     
     if resp.status_code == 200:
-        return "✅ Приглашение принято! Соединение устанавливается..."
-    return "❌ Ошибка при принятии приглашения", 500
+        return "✅ Приглашение принято! Соединение устанавливается через DID Exchange..."
+    else:
+        logging.error(f"Ошибка приема приглашения: {resp.text}")
+        return "❌ Ошибка при принятии приглашения", 500
 
 @app.route('/connections', methods=['GET'])
 def get_connections():
