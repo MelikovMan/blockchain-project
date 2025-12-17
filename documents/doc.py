@@ -172,6 +172,7 @@ def generate_medical_pdf(
 def main():
     with HospitalDBManager() as db_manager:
         # Добавляем новую больницу
+        # раскоментите для добавления больницы и узи
         #new_hospital_did = db_manager.add_hospital(
         #hospital_did=3,
         #name="Областной диагностический центр",
