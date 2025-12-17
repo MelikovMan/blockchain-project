@@ -102,7 +102,7 @@ class MedicalScenarioRunner:
         credential_offer = {
             "connection_id": hospital_connection_id,
             "credential_preview": {
-                "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
+                "@type": "issue-credential/2.0/credential-preview",
                 "attributes": [
                     {"name": "full_name", "value": "Иванов Иван Иванович"},
                     {"name": "date_of_birth", "value": "1985-05-15"},
@@ -111,10 +111,14 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": cred_def_id  # Должен быть реальный ID
+            "filter": {
+                "indy": {
+                    "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default" 
+                }
+        },
         }
         issue_resp = requests.post(
-            f"{self.hospital_admin}/issue-credential/send-offer",
+            f"{self.hospital_admin}/issue-credential-2.0/send-offer",
             headers=self.hospital_headers,
             json=credential_offer
         )
@@ -144,7 +148,7 @@ class MedicalScenarioRunner:
         }
         
         proof_resp = requests.post(
-            f"{self.hospital_admin}/present-proof/send-request",
+            f"{self.hospital_admin}/present-proof-2.0/send-request",
             headers=self.hospital_headers,
             json=emergency_request
         )
@@ -157,7 +161,7 @@ class MedicalScenarioRunner:
             pres_ex_id = proof_resp.json()['presentation_exchange_id']
             print(f"ID презентации: {pres_ex_id}")
             status_resp = requests.get(
-                f"{self.hospital_admin}/present-proof/records/{pres_ex_id}",
+                f"{self.hospital_admin}/present-proof-2.0/records/{pres_ex_id}",
                 headers=self.hospital_headers
             )
             if status_resp.status_code != 200:
