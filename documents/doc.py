@@ -13,7 +13,7 @@ from DataBase.work_db import HospitalDBManager
 import os
 
 # Регистрация шрифта (проверяем наличие файла)
-font_path = 'documents/fonts/DejaVuSans.ttf'
+font_path = 'fonts/DejaVuSans.ttf'
 if os.path.exists(font_path):
     try:
         pdfmetrics.registerFont(TTFont('DejaVu', font_path))
@@ -225,7 +225,7 @@ def main():
             opisanie=result[12],
             zakl=result[13],
             fio_vrach=result[14],
-            stamp_path = "documents/seal.png"
+            stamp_path = "seal.png"
         )
 
 if __name__ == "__main__":
