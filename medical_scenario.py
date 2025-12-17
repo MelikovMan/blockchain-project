@@ -90,7 +90,7 @@ class MedicalScenarioRunner:
     
         
         # ЭТАП 3: Больница выпускает медицинскую справку, сначала получает определение.
-        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord66", headers=self.hospital_headers)
+        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord110", headers=self.hospital_headers)
         if cred_def_find.json()["credential_definition_ids"]:
             print("Определение VC уже существует")
             cred_result = cred_def_find.json()
