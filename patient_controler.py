@@ -53,8 +53,8 @@ def handle_webhooks(topic):
     Это асинхронный способ получения уведомлений от агента.
     """
     message = request.json
-    logging.info(f"[Webhook] Топик: {topic}, Сообщение: {message}")
-    if topic == 'didexchange':
+    logging.info(f"[Webhook] Топик: {topic}, Сообщение: {json.dumps(message, indent=2)}")
+    if topic == 'connections':
         # Обработка событий DID Exchange
         state = message.get('state')
         connection_id = message.get('connection_id')
@@ -71,11 +71,8 @@ def handle_webhooks(topic):
             logging.info(f"✅ Ответ на DID Exchange получен: {connection_id}")
         elif state == 'completed':
             logging.info(f"🏁 DID Exchange завершен: {connection_id}")
-    elif topic == 'connections':
-        # Уведомление об изменении статуса соединения
-        if message['state'] == 'response':
-            logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
-    
+        elif state == 'response':
+            logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}") 
     elif topic == 'issue_credential':
         # Уведомление о поступлении новой медицинской справки
         if message['state'] == 'offer_received':

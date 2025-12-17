@@ -36,7 +36,6 @@ class MedicalScenarioRunner:
     
         invitation = invitation_resp.json()['invitation']
         print(f"   Приглашение с did:peer:4 создано: {invitation['@id']}")
-        print(invitation)
         # ЭТАП 2: Пациент принимает приглашение через DID Exchange
         print("2. 👤 Пациент принимает приглашение через DID Exchange...")
     
