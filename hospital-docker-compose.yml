@@ -32,7 +32,8 @@ services:
       - "8020:8020" # Транспорт для обмена с другими агентами
       - "8021:8021" # Административный API для контроллера
     volumes:
-      - hospital_wallet_data:/home/indy/.indy_client/wallet/HospitalWallet
+      - hospital_wallet_data:/home/aries/.acapy_agent/wallet/HospitalWallet
+    user: root
     command: >
       start
       --wallet-name HospitalWallet

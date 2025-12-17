@@ -90,7 +90,7 @@ class MedicalScenarioRunner:
     
         
         # ЭТАП 3: Больница выпускает медицинскую справку, сначала получает определение.
-        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord110", headers=self.hospital_headers)
+        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord25", headers=self.hospital_headers)
         if cred_def_find.json()["credential_definition_ids"]:
             print("Определение VC уже существует")
             cred_result = cred_def_find.json()
@@ -106,7 +106,7 @@ class MedicalScenarioRunner:
                 "attributes": [
                     {"name": "full_name", "value": "Иванов Иван Иванович"},
                     {"name": "date_of_birth", "value": "1985-05-15"},
-                    {"name": "blood_group_rh", "value": "A+"},
+                    {"name": "blood_group_rh", "value": "A-"},
                     {"name": "severe_allergies", "value": json.dumps(["Пенициллин"])},
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
@@ -159,8 +159,7 @@ class MedicalScenarioRunner:
             print("   ✅ Экстренный запрос отправлен. Система пациента должна автоматически ответить.")
             
             # Проверяем статус через 4 секунд
-            await asyncio.sleep(7)
-            print(proof_resp.json())
+            await asyncio.sleep(4)
             pres_ex_id = proof_resp.json()['pres_ex_id']
             print(f"ID презентации: {pres_ex_id}")
             status_resp = requests.get(

@@ -22,7 +22,8 @@ services:
       - "8030:8030"
       - "8031:8031"
     volumes:
-      - patient_wallet_data:/home/indy/.indy_client/wallet/AlicePatientWallet
+      - patient_wallet_data:/home/aries/.acapy_agent/wallet/AlicePatientWallet
+    user: root
     command: >
       start --wallet-name AlicePatientWallet
             --wallet-key StrongPatientWalletKey456
