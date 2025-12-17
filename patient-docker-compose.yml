@@ -17,6 +17,7 @@ services:
       - ACAPY_AUTO_ACCEPT_REQUESTS=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
       - ACAPY_WEBHOOK_URL=http://host.docker.internal:8060/webhooks  # Автоматически сохранять принятые credentials
+      - ACAPY_NOTIFY_REVOCATION=true 
     ports:
       - "8030:8030"
       - "8031:8031"

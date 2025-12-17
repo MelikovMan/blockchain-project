@@ -18,21 +18,27 @@ services:
       - ACAPY_WALLET_ALLOW_INSECURE_SEED=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
-      
+      # Ревокация
+      - ACAPY_NOTIFY_REVOCATION=true  # Разрешить уведомления об отзыве
+      - ACAPY_AUTO_REVOKE_CREDENTIALS=false  # Ручное управление отзывом
       # Webhook для получения транзакций на подпись от регулятора
       - ACAPY_WEBHOOK_URL=http://host.docker.internal:8050/webhooks
       
       # Включение протокола эндоузинга для работы с регулятором
       - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser
       - ACAPY_AUTO_ENDORSE_TRANSACTIONS=false  # Ручное подтверждение транзакций
-      
-      # Конфигурация для запросов одобрения у регулятора
-      - ACAPY_NOTIFY_REVOCATION=false
+      - ACAPY_TAILS_SERVER_BASE_URL=http://host.docker.internal:6543
+      - ACAPY_TAILS_SERVER_UPLOAD_URL=http://host.docker.internal:6543/upload
+      - USER=root
+    user: root
     ports:
       - "8020:8020" # Транспорт для обмена с другими агентами
       - "8021:8021" # Административный API для контроллера
+      - "6543:6543"
     volumes:
       - hospital_wallet_data:/home/indy/.indy_client/wallet
+      - hospital_tails_data:/home/indy/.indy_client/tails
+    
     command: >
       start
       --wallet-name HospitalWallet
@@ -45,3 +51,4 @@ services:
       --preserve-exchange-records
 volumes:
   hospital_wallet_data:
+  hospital_tails_data:

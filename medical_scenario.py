@@ -2,6 +2,7 @@
 ПОЛНЫЙ СЦЕНАРИЙ ВЗАИМОДЕЙСТВИЯ МЕЖДУ БОЛЬНИЦЕЙ И ПАЦИЕНТОМ
 """
 import asyncio
+import time
 import requests
 import json
 
@@ -138,6 +139,10 @@ class MedicalScenarioRunner:
                 "indy":{
                     "name": "EMERGENCY: Blood Type Request",
                     "version": "1.0",
+                    "non_revoked": {  # Требуем, чтобы credential не был отозван
+                        "from": 0,
+                        "to": int(time.time())
+                    },
                     "requested_attributes": {
                         "blood_attr": {
                             "name": "blood_group_rh",

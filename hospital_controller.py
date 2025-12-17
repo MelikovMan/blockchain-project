@@ -1,3 +1,4 @@
+import time
 import requests
 import json
 import logging
@@ -11,7 +12,7 @@ AGENT_ADMIN_URL = "http://localhost:8021"
 AGENT_API_KEY = "super-secret-admin-api-key-123"
 HEADERS = {"X-API-Key": AGENT_API_KEY, "Content-Type": "application/json"}
 DID_SEED = "very_strong_hospital_seed0000000"
-
+REVOCATION_REGISTRY_SIZE = 1000
 # Упрощенное "хранилище" данных пациента (в реальности - подключение к БД ЛПУ)
 MEDICAL_RECORDS = {
     "patient_123": {
@@ -41,6 +42,39 @@ def generate_and_publish_did():
         print(f"Ошибка связывания с публичным DiD")
         return False
     return True
+
+def create_revocation_registry(cred_def_id):
+    """Создает реестр отзыва для credential definition"""
+    revocation_body = {
+        "credential_definition_id": cred_def_id,
+        "max_cred_num": REVOCATION_REGISTRY_SIZE,
+        "issuance_type": "ISSUANCE_ON_DEMAND"
+    }
+    
+    revocation_resp = requests.post(
+        f"{AGENT_ADMIN_URL}/revocation/create-registry",
+        headers=HEADERS,
+        json=revocation_body
+    )
+    
+    if revocation_resp.status_code != 200:
+        logging.error(f"Ошибка создания реестра отзыва: {revocation_resp.text}")
+        return None
+    
+    registry_id = revocation_resp.json()["revoc_reg_id"]
+    logging.info(f"Реестр отзыва создан: {registry_id}")
+    
+    # Публикация реестра в блокчейн
+    publish_resp = requests.patch(
+        f"{AGENT_ADMIN_URL}/revocation/registry/{registry_id}/publish",
+        headers=HEADERS,
+        json={}
+    )
+    
+    if publish_resp.status_code != 200:
+        logging.error(f"Ошибка публикации реестра: {publish_resp.text}")
+    
+    return registry_id
 def create_schema_and_cred_def():
     """
     Шаг 1: Регистрация схемы и определения учетных данных в блокчейне.
@@ -48,8 +82,8 @@ def create_schema_and_cred_def():
     """
     
     schema_body = {
-        "schema_name": "HospitalMedicalRecord66",
-        "schema_version": "1.0.5",
+        "schema_name": "HospitalMedicalRecord104",
+        "schema_version": "1.0.6",
         "attributes": [
             "full_name",
             "date_of_birth",
@@ -59,7 +93,7 @@ def create_schema_and_cred_def():
         ]
     }
     # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord66",headers=HEADERS)
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord104",headers=HEADERS)
     if schema_find.json()["schema_ids"]:
         print("Схема уже существует")
         schema_result = schema_find.json()
@@ -69,29 +103,44 @@ def create_schema_and_cred_def():
         schema_resp = requests.post(f"{AGENT_ADMIN_URL}/schemas", headers=HEADERS, json=schema_body)
         if schema_resp.status_code != 200:
             logging.error(f"Ошибка создания схемы: {schema_resp.text}")
-            return None
+            return None, None
 
         schema_result = schema_resp.json()
         schema_id = schema_result["schema_id"]
     # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord66", headers=HEADERS)
-    if cred_def_find.json()["credential_definition_ids"]:
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord104", headers=HEADERS)
+    cred_defs = cred_def_find.json().get("credential_definition_ids", [])
+    if cred_defs:
         print("Определение VC уже существует")
-        cred_result = cred_def_find.json()
-        return cred_result["credential_definition_ids"][0]
+        cred_def_id = cred_defs[0]
+        registry_resp = requests.get(
+            f"{AGENT_ADMIN_URL}/revocation/registries/created",
+            headers=HEADERS
+        )
+        
+        if registry_resp.status_code == 200:
+            registries = registry_resp.json().get("rev_reg_ids", [])
+            if any(cred_def_id in reg_id for reg_id in registries):
+                print("Реестр отзыва существует")
+                return cred_def_id, [reg_id for reg_id in registries if cred_def_id in reg_id][0]
 
     # 2. Создание определения учетных данных на основе схемы
     cred_def_body = {
         "schema_id": schema_id,
-        "support_revocation": False,
+        "support_revocation": True,  # ВКЛЮЧАЕМ поддержку отзыва
+        "revocation_registry_size": REVOCATION_REGISTRY_SIZE,
         "tag": "default"
     }
     cred_def_resp = requests.post(f"{AGENT_ADMIN_URL}/credential-definitions", headers=HEADERS, json=cred_def_body)
     if cred_def_resp.status_code != 200:
         logging.error(f"Ошибка создания cred def: {cred_def_resp.text}")
-        return None
+        return None, None
+    cred_def_id = cred_def_resp.json()["credential_definition_id"]
+    
+    # 3. Создание реестра отзыва
+    registry_id = create_revocation_registry(cred_def_id)
 
-    return cred_def_resp.json()["credential_definition_id"]
+    return cred_def_id, registry_id
 def handle_connection_webhook(message):
     """Обработка вебхуков соединений"""
     state = message.get('state')
@@ -420,21 +469,10 @@ def handle_hospital_webhooks(topic):
     
     return jsonify({"status": "ok"}), 200
 @app.route('/issue-credential', methods=['POST'])
-def issue_medical_credential():
+def issue_medical_credential_with_revocation(connection_id, patient_data, rev_reg_id):
     """
-    Шаг 2: Выпуск верифицируемой медицинской справки для пациента.
-    Эндпоинт, который может вызываться из внутренней системы больницы.
+    Выпуск credential с поддержкой отзыва
     """
-    # 1. Получаем данные пациента из запроса (например, из EHR системы)
-    patient_id = request.json.get("patient_id")
-    connection_id = request.json.get("connection_id") # ID установленного соединения с агентом пациента
-
-    if patient_id not in MEDICAL_RECORDS:
-        return jsonify({"error": "Пациент не найден"}), 404
-
-    patient_data = MEDICAL_RECORDS[patient_id]
-
-    # 2. Формируем предложение учетных данных для агента пациента
     credential_offer = {
         "connection_id": connection_id,
         "credential_preview": {
@@ -449,19 +487,16 @@ def issue_medical_credential():
         },
         "filter": {
             "indy": {
-                "cred_def_id": CRED_DEF_ID 
+                "cred_def_id": CRED_DEF_ID,
+                "revocation_registry_id": rev_reg_id,
+                "revocation_interval": {
+                    "support_revocation": True
+                }
             }
-    },
+        }
     }
-
-    # 3. Отправляем предложение агенту через административный API
-    issue_resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential-2.0/send-offer", headers=HEADERS, json=credential_offer)
-
-    if issue_resp.status_code != 200:
-        logging.error(f"Ошибка отправки оффера: {issue_resp.text}")
-        return jsonify({"error": "Не удалось выпустить справку"}), 500
-
-    return jsonify(issue_resp.json()), 200
+    
+    return credential_offer
 
 @app.route('/verify-proof', methods=['POST'])
 def verify_emergency_proof():
@@ -534,7 +569,50 @@ def create_invitation():
     }), 200
 # Глобальная переменная для ID определения учетных данных
 CRED_DEF_ID = None
-
+@app.route('/revoke-credential', methods=['POST'])
+def revoke_credential():
+    """
+    Отзыв медицинской справки (например, при обнаружении ошибки)
+    """
+    data = request.json
+    cred_ex_id = data.get("cred_ex_id")
+    publish_immediately = data.get("publish_immediately", True)
+    
+    if not cred_ex_id:
+        return jsonify({"error": "Не указан ID обмена credential"}), 400
+    
+    revoke_body = {
+        "cred_ex_id": cred_ex_id,
+        "publish": publish_immediately,
+        "comment": data.get("reason", "Отзыв по медицинским показаниям")
+    }
+    
+    revoke_resp = requests.post(
+        f"{AGENT_ADMIN_URL}/revocation/revoke",
+        headers=HEADERS,
+        json=revoke_body
+    )
+    
+    if revoke_resp.status_code != 200:
+        logging.error(f"Ошибка отзыва credential: {revoke_resp.text}")
+        return jsonify({"error": "Не удалось отозвать справку"}), 500
+    
+    # Публикация обновлений реестра отзыва
+    if publish_immediately and CRED_DEF_ID:
+        publish_resp = requests.post(
+            f"{AGENT_ADMIN_URL}/revocation/publish-revocations",
+            headers=HEADERS,
+            json={}
+        )
+        
+        if publish_resp.status_code == 200:
+            logging.info(f"Обновления реестра отзыва опубликованы")
+    
+    return jsonify({
+        "status": "revoked",
+        "cred_ex_id": cred_ex_id,
+        "timestamp": time.time()
+    }), 200
 if __name__ == '__main__':
     os.makedirs('logs', exist_ok=True)
     logging.basicConfig(filename='logs/hospital.log', level=logging.INFO,encoding='utf-8')
@@ -547,9 +625,10 @@ if __name__ == '__main__':
             print("Ошибка создания DiD. Не удалось инициализировать агента")
 
     
-    CRED_DEF_ID = create_schema_and_cred_def()
-    if CRED_DEF_ID:
+    CRED_DEF_ID, REV_REG_ID = create_schema_and_cred_def() 
+    if CRED_DEF_ID and REV_REG_ID:
         print(f"[INFO] Cred Def ID зарегистрирован: {CRED_DEF_ID}")
+        print(f"[INFO] Revocation Registry ID: {REV_REG_ID}")
         app.run(port=8050, debug=True)
     else:
-        print("[ERROR] Не удалось инициализировать агента. Проверьте сеть Indy.")
+        print("[ERROR] Не удалось инициализировать агента с поддержкой отзыва.")
