@@ -89,7 +89,15 @@ class MedicalScenarioRunner:
             await asyncio.sleep(2)
     
         
-        # ЭТАП 3: Больница выпускает медицинскую справку
+        # ЭТАП 3: Больница выпускает медицинскую справку, сначала получает определение.
+        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord66", headers=self.hospital_headers)
+        if cred_def_find.json()["credential_definition_ids"]:
+            print("Определение VC уже существует")
+            cred_result = cred_def_find.json()
+            cred_def_id = cred_result["credential_definition_ids"][0]
+        else:
+            print("Не найдено опрделение VC!")
+            return
         print("3. 📋 Больница выпускает медицинскую справку...")
         credential_offer = {
             "connection_id": hospital_connection_id,
@@ -103,9 +111,8 @@ class MedicalScenarioRunner:
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
             },
-            "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:29:default"  # Должен быть реальный ID
+            "cred_def_id": cred_def_id  # Должен быть реальный ID
         }
-        
         issue_resp = requests.post(
             f"{self.hospital_admin}/issue-credential/send-offer",
             headers=self.hospital_headers,
@@ -129,7 +136,7 @@ class MedicalScenarioRunner:
                 "requested_attributes": {
                     "blood_attr": {
                         "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:29:default"}]
+                        "restrictions": [{"cred_def_id": cred_def_id}]
                     }
                 },
                 "requested_predicates":{}
@@ -145,8 +152,8 @@ class MedicalScenarioRunner:
         if proof_resp.status_code == 200:
             print("   ✅ Экстренный запрос отправлен. Система пациента должна автоматически ответить.")
             
-            # Проверяем статус через 3 секунды
-            await asyncio.sleep(5)
+            # Проверяем статус через 8 секунд
+            await asyncio.sleep(8)
             pres_ex_id = proof_resp.json()['presentation_exchange_id']
             print(f"ID презентации: {pres_ex_id}")
             status_resp = requests.get(
