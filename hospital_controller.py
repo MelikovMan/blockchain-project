@@ -200,7 +200,7 @@ def handle_present_proof_webhook(message):
         logging.info(message)
         try:
             detail_resp = requests.get(
-                f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}",
+                f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}",
                 headers=HEADERS
             )
             
@@ -261,7 +261,7 @@ def get_presentation_credentials_data(pres_ex_id, connection_id):
     try:
         # Получаем список credentials для этой презентации
         creds_resp = requests.get(
-            f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/credentials",
+            f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/credentials",
             headers=HEADERS
         )
         
@@ -299,7 +299,7 @@ def send_credential_offer(cred_ex_id):
     """Отправляет оффер учетных данных в ответ на предложение"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-offer",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/send-offer",
             headers=HEADERS,
             json={}
         )
@@ -314,7 +314,7 @@ def issue_credential(cred_ex_id):
     """Выпускает учетные данные"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/issue",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/issue",
             headers=HEADERS,
             json={"comment": "Медицинская справка выпущена"}
         )
@@ -329,7 +329,7 @@ def verify_presentation(pres_ex_id):
     """Верифицирует полученное доказательство"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/verify-presentation",
+            f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/verify-presentation",
             headers=HEADERS,
             json={}
         )
@@ -351,7 +351,7 @@ def auto_issue_credential(connection_id, patient_id):
     credential_offer = {
         "connection_id": connection_id,
         "credential_preview": {
-            "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
+            "@type": "issue-credential/2.0/credential-preview",
             "attributes": [
                 {"name": "full_name", "value": patient_data["full_name"]},
                 {"name": "date_of_birth", "value": patient_data["date_of_birth"]},
@@ -360,12 +360,16 @@ def auto_issue_credential(connection_id, patient_id):
                 {"name": "chronic_diagnoses", "value": json.dumps(patient_data["chronic_diagnoses"], ensure_ascii=False)}
             ]
         },
-        "cred_def_id": CRED_DEF_ID
+        "filter": {
+            "indy": {
+                "cred_def_id": CRED_DEF_ID 
+            }
+    },
     }
     
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/send-offer",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/send-offer",
             headers=HEADERS,
             json=credential_offer
         )
@@ -396,10 +400,10 @@ def handle_hospital_webhooks(topic):
     if topic == 'connections':
         handle_connection_webhook(message)
     
-    elif topic == 'issue_credential':
+    elif topic == 'issue_credential' or topic == 'issue_credential_v2_0':
         handle_issue_credential_webhook(message)
     
-    elif topic == 'present_proof':
+    elif topic == 'present_proof' or topic == 'present_proof_v2_0':
         handle_present_proof_webhook(message)
     
     elif topic == 'endorsements':
@@ -434,7 +438,7 @@ def issue_medical_credential():
     credential_offer = {
         "connection_id": connection_id,
         "credential_preview": {
-            "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
+            "@type": "issue-credential/2.0/credential-preview",
             "attributes": [
                 {"name": "full_name", "value": patient_data["full_name"]},
                 {"name": "date_of_birth", "value": patient_data["date_of_birth"]},
@@ -443,11 +447,15 @@ def issue_medical_credential():
                 {"name": "chronic_diagnoses", "value": json.dumps(patient_data["chronic_diagnoses"], ensure_ascii=False)}
             ]
         },
-        "cred_def_id": CRED_DEF_ID # ID, полученный при создании cred def
+        "filter": {
+            "indy": {
+                "cred_def_id": CRED_DEF_ID 
+            }
+    },
     }
 
     # 3. Отправляем предложение агенту через административный API
-    issue_resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential/send-offer", headers=HEADERS, json=credential_offer)
+    issue_resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential-2.0/send-offer", headers=HEADERS, json=credential_offer)
 
     if issue_resp.status_code != 200:
         logging.error(f"Ошибка отправки оффера: {issue_resp.text}")
@@ -482,7 +490,7 @@ def verify_emergency_proof():
     }
 
     # 3. Отправляем запрос на доказательство
-    proof_resp = requests.post(f"{AGENT_ADMIN_URL}/present-proof/send-request", headers=HEADERS, json=proof_request)
+    proof_resp = requests.post(f"{AGENT_ADMIN_URL}/present-proof-2.0/send-request", headers=HEADERS, json=proof_request)
 
     if proof_resp.status_code != 200:
         return jsonify({"error": "Не удалось отправить запрос на верификацию"}), 500

@@ -75,12 +75,17 @@ def handle_webhooks(topic):
         elif state == 'response':
             logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}") 
     elif topic == 'issue_credential':
+        # Уведомление об изменении статуса соединения
+        if message['state'] == 'response':
+            logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
+    
+    elif topic == 'issue_credential' or topic == 'issue_credential_v2_0':
         # Уведомление о поступлении новой медицинской справки
         if message['state'] == 'offer_received':
             cred_ex_id = message['credential_exchange_id']
             logging.info(f"📄 Получено предложение справки. ID: {cred_ex_id}")
             # Автоматически принимаем оффер
-            resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-request", 
+            resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/send-request", 
                          headers=HEADERS, json={})
             if resp.status_code == 200:
                 presentation_request = resp.json().get('presentation_request')
@@ -90,7 +95,7 @@ def handle_webhooks(topic):
         elif message['state'] == 'credential_received':
             logging.info("🎉 Медицинская справка успешно сохранена в кошельке!")
     
-    elif topic == 'present_proof':
+    elif topic == 'present_proof' or topic == 'present_proof_v2_0':
         # Уведомление о запросе доказательства (например, от врача скорой)
         if message['state'] == 'request_received':
             pres_ex_id = message['presentation_exchange_id']
@@ -100,7 +105,7 @@ def handle_webhooks(topic):
             presentation_request = message.get('presentation_request')
             if presentation_request is None:
                 # Запрашиваем у агента
-                resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}", headers=HEADERS)
+                resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}", headers=HEADERS)
                 if resp.status_code == 200:
                     presentation_request = resp.json().get('presentation_request')
                 else:
@@ -114,7 +119,7 @@ def handle_webhooks(topic):
                     "requested_predicates":{},
                     "self_attested_attributes":{},
                 }
-                requesting = requests.post(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/send-presentation",
+                requesting = requests.post(f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/send-presentation",
                              headers=HEADERS, json=emergency_response)
                 if requesting.status_code != 200:
                     print(f"Ошибка отправки репрезентации: {requesting.text}")
@@ -129,7 +134,7 @@ def is_emergency_request(presentation_request):
 def get_credential_id(pres_ex_id):
     """Находит ID credential, содержащего нужный атрибут"""
     # Упрощенная логика. В реальности нужно искать в wallet
-    creds_resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/credentials", headers=HEADERS)
+    creds_resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/credentials", headers=HEADERS)
     if creds_resp.status_code != 200:
         print(f"Ошибка запроса получения credentials по предложению {creds_resp.text}")
         return None
