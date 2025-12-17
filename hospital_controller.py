@@ -147,25 +147,25 @@ def handle_issue_credential_webhook(message):
     CREDENTIAL_EXCHANGES[cred_ex_id]['state'] = state
     CREDENTIAL_EXCHANGES[cred_ex_id]['connection_id'] = connection_id
     
-    if state == 'proposal_received':
+    if state == 'proposal-received':
         logging.info(f"📋 Получено предложение учетных данных: {cred_ex_id}")
         # Можно автоматически отправить оффер в ответ
         send_credential_offer(cred_ex_id)
     
-    elif state == 'offer_sent':
+    elif state == 'offer-sent':
         logging.info(f"📤 Предложение учетных данных отправлено: {cred_ex_id}")
     
-    elif state == 'request_received':
+    elif state == 'request-received':
         logging.info(f"📥 Получен запрос на учетные данные: {cred_ex_id}")
         # Автоматически выпускаем учетные данные
         issue_credential(cred_ex_id)
     
-    elif state == 'credential_issued':
+    elif state == 'credential-issued':
         logging.info(f"✅ Учетные данные выпущены: {cred_ex_id}")
         # Обновляем статус в нашей системе
         update_credential_status(cred_ex_id, 'issued')
     
-    elif state == 'credential_acked':
+    elif state == 'credential-acked':
         logging.info(f"🎉 Учетные данные подтверждены пациентом: {cred_ex_id}")
         # Справка успешно доставлена и сохранена
         update_credential_status(cred_ex_id, 'delivered')
@@ -184,17 +184,17 @@ def handle_issue_credential_webhook(message):
 def handle_present_proof_webhook(message):
     """Обработка вебхуков верификации доказательств"""
     state = message.get('state')
-    pres_ex_id = message.get('presentation_exchange_id')
+    pres_ex_id = message.get('pres_ex_id')
     connection_id = message.get('connection_id', '')
-    if state == 'request_sent':
+    if state == 'request-sent':
         logging.info(f"📤 Запрос на доказательство отправлен: {pres_ex_id}")
     
-    elif state == 'presentation_received':
+    elif state == 'presentation-received':
         logging.info(f"📥 Получено доказательство: {pres_ex_id}")
         # Можно автоматически верифицировать
         verify_presentation(pres_ex_id)
     
-    elif state == 'verified':
+    elif state == 'done':
         logging.info(f"✅ Доказательство верифицировано: {pres_ex_id}")
         # Извлекаем раскрытые атрибуты
         logging.info(message)
@@ -205,7 +205,7 @@ def handle_present_proof_webhook(message):
             )
             
             if detail_resp.status_code == 200:
-                presentation_details = detail_resp.json()["presentation"]
+                presentation_details = detail_resp.json()["by_format"]["pres"]["indy"]
                 
                 # Теперь извлекаем revealed_attrs из деталей
                 proof = presentation_details.get('requested_proof', {})
@@ -400,10 +400,10 @@ def handle_hospital_webhooks(topic):
     if topic == 'connections':
         handle_connection_webhook(message)
     
-    elif topic == 'issue_credential' or topic == 'issue_credential_v2_0':
+    elif topic == 'issue_credential_v2_0':
         handle_issue_credential_webhook(message)
     
-    elif topic == 'present_proof' or topic == 'present_proof_v2_0':
+    elif topic == 'present_proof_v2_0':
         handle_present_proof_webhook(message)
     
     elif topic == 'endorsements':
@@ -496,7 +496,7 @@ def verify_emergency_proof():
         return jsonify({"error": "Не удалось отправить запрос на верификацию"}), 500
 
     # 4. Ответ содержит идентификатор презентации, статус которой нужно проверять асинхронно
-    presentation_exchange_id = proof_resp.json()["presentation_exchange_id"]
+    presentation_exchange_id = proof_resp.json()["pres_ex_id"]
     return jsonify({"presentation_exchange_id": presentation_exchange_id}), 200
 @app.route('/create-invitation', methods=['POST'])
 def create_invitation():

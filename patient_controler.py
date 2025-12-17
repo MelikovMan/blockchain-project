@@ -60,7 +60,7 @@ def handle_webhooks(topic):
         state = message.get('state')
         connection_id = message.get('connection_id')
         
-        if state == 'request_received':
+        if state == 'request-received':
             logging.info(f"📥 Получен запрос на DID Exchange: {connection_id}")
             # Автоматически принимаем запрос
             requests.post(
@@ -68,21 +68,20 @@ def handle_webhooks(topic):
                 headers=HEADERS,
                 json={}
             )
-        elif state == 'response_received':
+        elif state == 'response-received':
             logging.info(f"✅ Ответ на DID Exchange получен: {connection_id}")
         elif state == 'completed':
             logging.info(f"🏁 DID Exchange завершен: {connection_id}")
         elif state == 'response':
             logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}") 
-    elif topic == 'issue_credential':
-        # Уведомление об изменении статуса соединения
-        if message['state'] == 'response':
+
+        elif message['state'] == 'response':
             logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
     
-    elif topic == 'issue_credential' or topic == 'issue_credential_v2_0':
+    elif topic == 'issue_credential_v2_0':
         # Уведомление о поступлении новой медицинской справки
-        if message['state'] == 'offer_received':
-            cred_ex_id = message['credential_exchange_id']
+        if message['state'] == 'offer-received':
+            cred_ex_id = message['cred_ex_id']
             logging.info(f"📄 Получено предложение справки. ID: {cred_ex_id}")
             # Автоматически принимаем оффер
             resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/send-request", 
@@ -92,32 +91,35 @@ def handle_webhooks(topic):
             else:
                 logging.error(f"Не удалось получить запрос на презентацию {cred_ex_id}: {resp.text}")
                 return jsonify({"status": "error"}), 400
-        elif message['state'] == 'credential_received':
+        elif message['state'] == 'credential-received':
             logging.info("🎉 Медицинская справка успешно сохранена в кошельке!")
     
-    elif topic == 'present_proof' or topic == 'present_proof_v2_0':
+    elif topic == 'present_proof_v2_0':
         # Уведомление о запросе доказательства (например, от врача скорой)
-        if message['state'] == 'request_received':
-            pres_ex_id = message['presentation_exchange_id']
+        if message['state'] == 'request-received':
+            logging.info("Current state is request_received")
+            pres_ex_id = message['pres_ex_id']
             logging.info(f"🔍 Получен запрос на предоставление данных. ID: {pres_ex_id}")
             
             # В ЭКСТРЕННОМ СЛУЧАЕ: Автоматически предоставить только критичные данные
-            presentation_request = message.get('presentation_request')
+            presentation_request = message['by_format']['pres_request']['indy']
             if presentation_request is None:
                 # Запрашиваем у агента
                 resp = requests.get(f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}", headers=HEADERS)
                 if resp.status_code == 200:
-                    presentation_request = resp.json().get('presentation_request')
+                    presentation_request = resp.json()['by_format']['pres_request']['indy']
                 else:
                     logging.error(f"Не удалось получить запрос на презентацию {pres_ex_id}: {resp.text}")
                     return jsonify({"status": "error"}), 400
             if is_emergency_request(presentation_request):
                 emergency_response = {
-                    "requested_attributes": {
-                        "blood_attr": {"cred_id": get_credential_id(pres_ex_id), "revealed": True}
-                    },
-                    "requested_predicates":{},
-                    "self_attested_attributes":{},
+                    "indy": {
+                        "requested_attributes": {
+                            "blood_attr": {"cred_id": get_credential_id(pres_ex_id), "revealed": True}
+                        },
+                        "requested_predicates":{},
+                        "self_attested_attributes":{},
+                    }
                 }
                 requesting = requests.post(f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/send-presentation",
                              headers=HEADERS, json=emergency_response)

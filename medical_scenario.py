@@ -113,7 +113,7 @@ class MedicalScenarioRunner:
             },
             "filter": {
                 "indy": {
-                    "cred_def_id": "M2yeapcDR9P7pi7mETjBui:3:CL:23:default" 
+                    "cred_def_id": cred_def_id 
                 }
         },
         }
@@ -134,16 +134,18 @@ class MedicalScenarioRunner:
         # Другая больница запрашивает данные пациента
         emergency_request = {
             "connection_id": hospital_connection_id,  # В реальности это будет другое соединение
-            "proof_request": {
-                "name": "EMERGENCY: Blood Type Request",
-                "version": "1.0",
-                "requested_attributes": {
-                    "blood_attr": {
-                        "name": "blood_group_rh",
-                        "restrictions": [{"cred_def_id": cred_def_id}]
-                    }
-                },
-                "requested_predicates":{}
+            "presentation_request": {
+                "indy":{
+                    "name": "EMERGENCY: Blood Type Request",
+                    "version": "1.0",
+                    "requested_attributes": {
+                        "blood_attr": {
+                            "name": "blood_group_rh",
+                            "restrictions": [{"cred_def_id": cred_def_id}]
+                        }
+                    },
+                    "requested_predicates":{}
+                }
             }
         }
         
@@ -156,9 +158,10 @@ class MedicalScenarioRunner:
         if proof_resp.status_code == 200:
             print("   ✅ Экстренный запрос отправлен. Система пациента должна автоматически ответить.")
             
-            # Проверяем статус через 8 секунд
-            await asyncio.sleep(8)
-            pres_ex_id = proof_resp.json()['presentation_exchange_id']
+            # Проверяем статус через 4 секунд
+            await asyncio.sleep(7)
+            print(proof_resp.json())
+            pres_ex_id = proof_resp.json()['pres_ex_id']
             print(f"ID презентации: {pres_ex_id}")
             status_resp = requests.get(
                 f"{self.hospital_admin}/present-proof-2.0/records/{pres_ex_id}",
@@ -167,9 +170,9 @@ class MedicalScenarioRunner:
             if status_resp.status_code != 200:
                 print(f"Ошибка запроса верификации! {status_resp.text}")
                 return
-            if status_resp.json()['state'] == 'verified':
+            if status_resp.json()['verified'] == 'true':
                 print("   🩺 Данные верифицированы! Врач получил группу крови пациента.")
-                revealed_attrs = status_resp.json()["presentation"]["requested_proof"].get('revealed_attrs', {})
+                revealed_attrs = status_resp.json()["by_format"]["pres"]["indy"]["requested_proof"].get('revealed_attrs', {})
                 if revealed_attrs:
                     print(f"   📊 Полученные данные: {revealed_attrs}")
             else: 
