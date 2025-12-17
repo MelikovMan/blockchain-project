@@ -1,3 +1,5 @@
+import sqlite3
+
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
@@ -6,6 +8,8 @@ from reportlab.lib import colors
 from datetime import datetime
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
+from DataBase.work_db import HospitalDBManager
 import os
 
 # Регистрация шрифта (проверяем наличие файла)
@@ -27,14 +31,15 @@ else:
 
 def generate_medical_pdf(
         output_file,
-        date: datetime,
+        date: str,
         number_protocol: int,
         FIO: str,
         gender: str,
         date_birth: str,
-        number_med_cart: str,
+        number_med_cart: int,
         nupr_otdel: str,
         vid_issled: str,
+        vc_type: int,
         scaner: str,
         datchik: str,
         opisanie: str,
@@ -97,12 +102,12 @@ def generate_medical_pdf(
 
     # Основные данные пациента
     patient_data = [
-        [Paragraph("Дата и время исследования:", table_text_style), Paragraph(date.strftime("%d.%m.%Y %H:%M"), table_text_style)],
+        [Paragraph("Дата и время исследования:", table_text_style), Paragraph(date, table_text_style)],
         [Paragraph("Номер протокола:", table_text_style), Paragraph(str(number_protocol), table_text_style)],
         [Paragraph("ФИО больного:", table_text_style), Paragraph(FIO, table_text_style)],
         [Paragraph("Пол:", table_text_style), Paragraph(gender, table_text_style)],
         [Paragraph("Дата рождения:", table_text_style), Paragraph(date_birth, table_text_style)],
-        [Paragraph("Номер мед. карты:", table_text_style), Paragraph(number_med_cart, table_text_style)],
+        [Paragraph("Номер мед. карты:", table_text_style), Paragraph(str(number_med_cart), table_text_style)],
         [Paragraph("Направившее отделение:", table_text_style), Paragraph(nupr_otdel, table_text_style)],
         [Paragraph("Вид исследования:", table_text_style), Paragraph(vid_issled, table_text_style)],
     ]
@@ -163,3 +168,69 @@ def generate_medical_pdf(
 
     doc.build(story)
     print(f"PDF '{output_file}' успешно создан")
+
+def main():
+    with HospitalDBManager() as db_manager:
+        # Добавляем новую больницу
+        #new_hospital_did = db_manager.add_hospital(
+        #hospital_did=3,
+        #name="Областной диагностический центр",
+        #vc_type=1,
+        #endpoint="https://odc.ru/api/Hospital",
+        #)
+
+        # Добавляем новую запись УЗИ
+        #new_record = {
+        #    'vc': 1,
+        #    'data_isl': '2024-01-18 11:00:00',
+        #    'number_protocol': 2024004,
+        #    'FIO': 'Смирнова Ольга Васильевна',
+        #    'gender': 'Ж',
+        #    'date_birth': '1988-05-12 00:00:00',
+        #    'number_med_card': 901234,
+        #    'napr_otd': 'Урологическое отделение',
+        #    'vid_issled': 'УЗИ почек и мочевого пузыря',
+        #    'vc_type': 1,
+        #    'scaner': 'Toshiba Aplio 500',
+        #    'datchik': 'Конвексный 3.5 МГц',
+        #    'opisanie': 'Исследование почек в поперечной и продольной плоскостях. Оценка размеров, структуры, наличия конкрементов.',
+        #    'zakl': 'Почки обычных размеров и структуры. Конкрементов не выявлено.',
+        #    'fio_vrach': 'Иванов П.К.',
+        #    'hospital_did': new_hospital_did
+        #}
+        #base_name = "UZI"
+        #db_manager.add_record(base_name, new_record)
+
+
+        # Поиск записей по vc
+        print("\nПоиск записей по vc:")
+        results = db_manager.search_uzi_by_vc(1)
+        for result in results:
+            print(f"  - {result[3]} (Протокол: {result[2]}, Дата: {result[1]})")
+
+        generate_medical_pdf(
+            output_file="protocol.pdf",
+            date=result[1],
+            number_protocol=result[2],
+            FIO=result[3],
+            gender=result[4],
+            date_birth=result[5],
+            number_med_cart=result[6],
+            nupr_otdel=result[7],
+            vid_issled=result[8],
+            vc_type=result[9],
+            scaner=result[10],
+            datchik=result[11],
+            opisanie=result[12],
+            zakl=result[13],
+            fio_vrach=result[14],
+            stamp_path = "documents/seal.png"
+        )
+
+if __name__ == "__main__":
+   # Проверка доступности sqlite3
+    print(f"Версия SQLite: {sqlite3.sqlite_version}")
+    print(f"Версия модуля SQLite3: {sqlite3.version}")
+
+    # Запуск основной функции
+    main()
