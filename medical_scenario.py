@@ -75,18 +75,25 @@ class MedicalScenarioRunner:
             return
     
     # Проверяем состояние соединения
-        connection_resp = requests.get(
-            f"{self.hospital_admin}/connections/{hospital_connection_id}",
-            headers=self.hospital_headers
-        )
+        while True:
+            connection_resp = requests.get(
+                f"{self.hospital_admin}/connections/{hospital_connection_id}",
+                headers=self.hospital_headers
+            )
     
-        if connection_resp.status_code == 200:
-            connection_state = connection_resp.json().get('state')
-            print(f"   Состояние соединения: {connection_state}")
+            if connection_resp.status_code == 200:
+                connection_state = connection_resp.json().get('state')
+                print(f"   Состояние соединения: {connection_state}")
         
-            if connection_state not in ['active', 'response', 'completed']:
-                print("⚠️  Соединение еще не готово, ожидаем...")
-            await asyncio.sleep(2)
+                if connection_state not in ['active', 'response', 'completed']:
+                    print("⚠️  Соединение еще не готово, ожидаем...")
+                    await asyncio.sleep(2)
+                elif connection_state == "abandoned":
+                    print(f"Connection abandoned! {connection_resp.json().get("error_msg",False) or json.dumps(connection_resp.json(),indent=2)}")
+                else:
+                    break
+                
+           
     
         
         # ЭТАП 3: Больница выпускает медицинскую справку, сначала получает определение.

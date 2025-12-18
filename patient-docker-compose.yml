@@ -14,8 +14,6 @@ services:
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
       - ACAPY_AUTO_PROVISION=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
-      - ACAPY_AUTO_ACCEPT_REQUESTS=true
-      - ACAPY_AUTO_STORE_CREDENTIAL=true
       - ACAPY_WEBHOOK_URL=http://host.docker.internal:8060/webhooks  # Автоматически сохранять принятые credentials
       - ACAPY_NOTIFY_REVOCATION=true 
     ports:
@@ -30,6 +28,5 @@ services:
             --admin-api-key patient-admin-key-456
             --auto-provision
             --auto-accept-invites
-            --auto-accept-requests
 volumes:
   patient_wallet_data:
