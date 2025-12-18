@@ -86,7 +86,7 @@ class MedicalScenarioRunner:
                 print(f"   Состояние соединения: {connection_state}")
         
                 if connection_state not in ['active', 'response', 'completed']:
-                    print("⚠️  Соединение еще не готово, ожидаем...")
+                    print("⚠️  Соединение еще не принято, ожидаем...")
                     await asyncio.sleep(2)
                 elif connection_state == "abandoned":
                     print(f"Connection abandoned! {connection_resp.json().get("error_msg",False) or json.dumps(connection_resp.json(),indent=2)}")
