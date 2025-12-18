@@ -31,6 +31,5 @@ services:
             --auto-provision
             --auto-accept-invites
             --auto-accept-requests
-            --auto-store-credential
 volumes:
   patient_wallet_data:
