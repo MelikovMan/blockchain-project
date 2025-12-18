@@ -26,7 +26,7 @@ class MedicalScenarioRunner:
             json={
             "use_did_method": "did:peer:4",
             "handshake_protocols": ["https://didcomm.org/didexchange/1.1"],
-            "alias": "City Hospital",
+            "alias": "City Hospital_1",
             "auto_accept": True
             }
         )
@@ -91,7 +91,7 @@ class MedicalScenarioRunner:
     
         
         # ЭТАП 3: Больница выпускает медицинскую справку, сначала получает определение.
-        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecord66", headers=self.hospital_headers)
+        cred_def_find = requests.get(f"{self.hospital_admin}/credential-definitions/created?=schema_name=HospitalMedicalRecordRevokable1", headers=self.hospital_headers)
         if cred_def_find.json()["credential_definition_ids"]:
             print("Определение VC уже существует")
             cred_result = cred_def_find.json()
@@ -107,7 +107,7 @@ class MedicalScenarioRunner:
                 "attributes": [
                     {"name": "full_name", "value": "Иванов Иван Иванович"},
                     {"name": "date_of_birth", "value": "1985-05-15"},
-                    {"name": "blood_group_rh", "value": "A+"},
+                    {"name": "blood_group_rh", "value": "Ab+"},
                     {"name": "severe_allergies", "value": json.dumps(["Пенициллин"])},
                     {"name": "chronic_diagnoses", "value": json.dumps(["Гипертензия"])}
                 ]
@@ -184,6 +184,67 @@ class MedicalScenarioRunner:
                 print(f"Ошибка верификации данных! Статус: f{status_resp.json()['state']}")
         else:
             print(f"Ошибка отправки экстренного запроса: {proof_resp.text}")
+
+
+        print("\n5. 🔄 Тестирование отзыва медицинской справки...")
+    
+        # Получаем список выданных credentials
+        credentials_resp = requests.get(
+            f"{self.hospital_admin}/issue-credential-2.0/records",
+            headers=self.hospital_headers
+        )
+        if credentials_resp.status_code != 200:
+            print(f"   ❌ Ошибка получения списка credentials: {credentials_resp.text}")
+            return
+        records = credentials_resp.json().get('results', [])
+        if not records:
+            print("   ⚠️  Не найдены credentials для отзыва")
+            return
+        cred_record = records[-1]["cred_ex_record"]
+        cred_ex_id = cred_record["cred_ex_id"]
+        issuance_thread_id=cred_record["thread_id"]
+        revoke_resp = requests.post(
+                f"{self.hospital_admin}/revocation/revoke",
+                headers=self.hospital_headers,
+                json={
+                    "connection_id":hospital_connection_id,
+                    "cred_ex_id": cred_ex_id,
+                    "publish": True,
+                    "notify":True,
+                    "comment": "Отзыв для тестирования системы",
+                    "thread_id":issuance_thread_id
+                }
+        )
+        if revoke_resp.status_code != 200:
+                print(f"  Ошибка отзыва Credential! {revoke_resp.text}")
+                return
+        print(f"   ✅ Credential успешно отозван {json.dumps(revoke_resp.json(),indent=2)}")
+        print("   Отозвание было опубликовано!")
+        proof_resp2 = requests.post(
+                    f"{self.hospital_admin}/present-proof-2.0/send-request",
+                    headers=self.hospital_headers,
+                    json=emergency_request  # Используем тот же запрос
+                )
+                
+        if proof_resp2.status_code == 200:
+            pres_ex_id2 = proof_resp2.json()['pres_ex_id']
+                    
+            # Ждем и проверяем результат
+            await asyncio.sleep(5)
+            status_resp2 = requests.get(
+                f"{self.hospital_admin}/present-proof-2.0/records/{pres_ex_id2}",
+                        headers=self.hospital_headers
+            )
+                    
+            if status_resp2.status_code == 200:
+                if status_resp2.json().get('verified') == 'false':
+                    print("   ✅ Система корректно определила отозванный credential")
+                else:
+                    print("   ⚠️  Система не обнаружила отзыв")
+            else:
+                print(f"   ❌ Ошибка проверки статуса: {status_resp2.text}")
+        else:
+            print(f"   ❌ Ошибка отправки запроса на верификацию: {proof_resp2.text}")
         print("\n🎯 Сценарий завершен!")
 
 # Запуск сценария

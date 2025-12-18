@@ -13,8 +13,6 @@ services:
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8030"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
       - ACAPY_AUTO_PROVISION=true
-      - ACAPY_AUTO_ACCEPT_INVITES=true
-      - ACAPY_AUTO_ACCEPT_REQUESTS=true
       - ACAPY_AUTO_STORE_CREDENTIAL=true
       - ACAPY_WEBHOOK_URL=http://host.docker.internal:8060/webhooks  # Автоматически сохранять принятые credentials
       - ACAPY_NOTIFY_REVOCATION=true 
@@ -22,7 +20,8 @@ services:
       - "8030:8030"
       - "8031:8031"
     volumes:
-      - patient_wallet_data:/home/indy/.indy_client/wallet
+      - patient_wallet_data:/home/aries/.acapy_agent/wallet/AlicePatientWallet
+    user: root
     command: >
       start --wallet-name AlicePatientWallet
             --wallet-key StrongPatientWalletKey456

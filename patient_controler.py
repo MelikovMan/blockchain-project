@@ -55,13 +55,7 @@ def handle_webhooks(topic):
     """
     message = request.json
     logging.info(f"[Webhook] Топик: {topic}, Сообщение: {json.dumps(message, indent=2)}")
-    if topic == 'revocation':
-        # Обработка уведомлений об отзыве
-        state = message.get('state')
-        if state == 'revoked':
-            cred_ex_id = message.get('cred_ex_id')
-            logging.warning(f"⚠️ Credential отозван: {cred_ex_id}")
-            #TODO: Уведомить пользователя в UI
+
     if topic == 'connections':
         # Обработка событий DID Exchange
         state = message.get('state')
@@ -81,13 +75,15 @@ def handle_webhooks(topic):
             logging.info(f"🏁 DID Exchange завершен: {connection_id}")
         elif state == 'response':
             logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}") 
-
-        elif message['state'] == 'response':
-            logging.info(f"✅ Соединение установлено! ID: {message['connection_id']}")
     
     elif topic == 'issue_credential_v2_0':
         # Уведомление о поступлении новой медицинской справки
-        if message['state'] == 'offer-received':
+        state = message.get('state')
+        if state == 'credential-revoked':
+                cred_ex_id = message.get('cred_ex_id')
+                logging.warning(f"⚠️ Credential отозван: {cred_ex_id}")
+                #TODO: Уведомить пользователя в UI
+        elif state == 'offer-received':
             cred_ex_id = message['cred_ex_id']
             logging.info(f"📄 Получено предложение справки. ID: {cred_ex_id}")
             # Автоматически принимаем оффер

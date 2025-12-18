@@ -44,11 +44,11 @@ def generate_and_publish_did():
     return True
 
 def create_revocation_registry(cred_def_id):
+    
     """Создает реестр отзыва для credential definition"""
     revocation_body = {
         "credential_definition_id": cred_def_id,
         "max_cred_num": REVOCATION_REGISTRY_SIZE,
-        "issuance_type": "ISSUANCE_ON_DEMAND"
     }
     
     revocation_resp = requests.post(
@@ -61,7 +61,7 @@ def create_revocation_registry(cred_def_id):
         logging.error(f"Ошибка создания реестра отзыва: {revocation_resp.text}")
         return None
     
-    registry_id = revocation_resp.json()["revoc_reg_id"]
+    registry_id = revocation_resp.json()["result"]["revoc_reg_id"]
     logging.info(f"Реестр отзыва создан: {registry_id}")
     
     # Публикация реестра в блокчейн
@@ -82,8 +82,8 @@ def create_schema_and_cred_def():
     """
     
     schema_body = {
-        "schema_name": "HospitalMedicalRecord104",
-        "schema_version": "1.0.6",
+        "schema_name": "HospitalMedicalRecordRevokable1",
+        "schema_version": "1.1.5",
         "attributes": [
             "full_name",
             "date_of_birth",
@@ -93,7 +93,7 @@ def create_schema_and_cred_def():
         ]
     }
     # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord104",headers=HEADERS)
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecordRevokable1",headers=HEADERS)
     if schema_find.json()["schema_ids"]:
         print("Схема уже существует")
         schema_result = schema_find.json()
@@ -108,7 +108,7 @@ def create_schema_and_cred_def():
         schema_result = schema_resp.json()
         schema_id = schema_result["schema_id"]
     # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord104", headers=HEADERS)
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecordRevokable1", headers=HEADERS)
     cred_defs = cred_def_find.json().get("credential_definition_ids", [])
     if cred_defs:
         print("Определение VC уже существует")
@@ -123,6 +123,10 @@ def create_schema_and_cred_def():
             if any(cred_def_id in reg_id for reg_id in registries):
                 print("Реестр отзыва существует")
                 return cred_def_id, [reg_id for reg_id in registries if cred_def_id in reg_id][0]
+            else:
+                print("Реест отзыва не существует")
+                registry_id = create_revocation_registry(cred_def_id)
+                return cred_def_id, registry_id
 
     # 2. Создание определения учетных данных на основе схемы
     cred_def_body = {
@@ -135,8 +139,9 @@ def create_schema_and_cred_def():
     if cred_def_resp.status_code != 200:
         logging.error(f"Ошибка создания cred def: {cred_def_resp.text}")
         return None, None
-    cred_def_id = cred_def_resp.json()["credential_definition_id"]
-    
+    logging.info(f"Создано credential definition {cred_def_resp.json()}")
+    cred_def_id = cred_def_resp.json()["sent"]["credential_definition_id"]
+    logging.info(f"Id: {cred_def_id}")
     # 3. Создание реестра отзыва
     registry_id = create_revocation_registry(cred_def_id)
 
@@ -186,7 +191,7 @@ def handle_connection_webhook(message):
 def handle_issue_credential_webhook(message):
     """Обработка вебхуков выпуска учетных данных"""
     state = message.get('state')
-    cred_ex_id = message.get('credential_exchange_id')
+    cred_ex_id = message.get('cred_ex_id')
     connection_id = message.get('connection_id')
     
     # Сохраняем информацию об обмене
@@ -229,6 +234,8 @@ def handle_issue_credential_webhook(message):
         error_msg = message.get('error_msg', '')
         logging.error(f"❌ Ошибка в процессе выпуска {cred_ex_id}: {state}, {error_msg}")
         update_credential_status(cred_ex_id, 'failed')
+    elif state == "credential-revoked":
+        logging.info(f"📋 Credential {cred_ex_id} отозван!")
 
 def handle_present_proof_webhook(message):
     """Обработка вебхуков верификации доказательств"""
@@ -458,7 +465,7 @@ def handle_hospital_webhooks(topic):
     elif topic == 'endorsements':
         handle_endorsement_webhook(message)
     
-    elif topic == 'revocation':
+    elif topic == 'issuer_cred_rev':
         handle_revocation_webhook(message)
     
     elif topic == 'basicmessages':
@@ -613,6 +620,20 @@ def revoke_credential():
         "cred_ex_id": cred_ex_id,
         "timestamp": time.time()
     }), 200
+def check_tails_server():
+    """Проверяет доступность tails server"""
+    try:
+        resp = requests.get(f"{AGENT_ADMIN_URL}/tails")
+        return resp.status_code == 200
+    except:
+        return False
+
+# Добавьте новую endpoint для проверки статуса tails server
+@app.route('/tails/status', methods=['GET'])
+def tails_status():
+    """Проверка статуса tails server"""
+    status = check_tails_server()
+    return jsonify({"tails_server_available": status}), 200
 if __name__ == '__main__':
     os.makedirs('logs', exist_ok=True)
     logging.basicConfig(filename='logs/hospital.log', level=logging.INFO,encoding='utf-8')

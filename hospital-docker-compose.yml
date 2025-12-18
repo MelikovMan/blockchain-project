@@ -1,5 +1,18 @@
 version: '3.7'
 services:
+  tails-server:
+    image: ghcr.io/bcgov/tails-server:sha-0bc5a54  # Использование конкретного тега
+    container_name: tails_server
+    restart: unless-stopped
+    ports:
+      - "6543:6543"
+    volumes:
+      - tails_server_storage:/home/indy/.indy_client/tails
+    command: >
+      ./tails-server
+      --host 0.0.0.0
+      --port 6543
+      --storage-path /home/indy/.indy_client/tails
   hospital-agent:
     image: bcgovimages/aries-cloudagent:py3.12_1.2.0
     container_name: hospital_agent
@@ -27,17 +40,16 @@ services:
       # Включение протокола эндоузинга для работы с регулятором
       - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser
       - ACAPY_AUTO_ENDORSE_TRANSACTIONS=false  # Ручное подтверждение транзакций
-      - ACAPY_TAILS_SERVER_BASE_URL=http://host.docker.internal:6543
-      - ACAPY_TAILS_SERVER_UPLOAD_URL=http://host.docker.internal:6543/upload
+      - ACAPY_TAILS_SERVER_BASE_URL=http://tails-server:6543
       - USER=root
     user: root
     ports:
       - "8020:8020" # Транспорт для обмена с другими агентами
       - "8021:8021" # Административный API для контроллера
-      - "6543:6543"
     volumes:
-      - hospital_wallet_data:/home/indy/.indy_client/wallet
-      - hospital_tails_data:/home/indy/.indy_client/tails
+      - hospital_wallet_data:/home/aries/.acapy_agent/wallet/HospitalWallet
+    depends_on:
+      - tails-server
     
     command: >
       start
@@ -51,4 +63,4 @@ services:
       --preserve-exchange-records
 volumes:
   hospital_wallet_data:
-  hospital_tails_data:
+  tails_server_storage:
