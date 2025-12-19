@@ -65,8 +65,8 @@ class Handler:
             if message_type == 'CREDENTIAL_ISSUANCE_REQUEST':
                 self.handle_credential_issuance_request(request.connection_id, message_data)
 
-            # elif message_type == 'CREDENTIAL_MODIFICATION_REQUEST':
-            #     handle_credential_modification_request(request.connection_id, message_data)
+            elif message_type == 'DID_REGISTRATION_REQUEST':
+                self.handle_credential_modification_request(request.connection_id, message_data)
 
             # elif message_type == 'STATUS_UPDATE':
             #     logging.info(f"Получено обновление статуса: {message_data}")
@@ -356,3 +356,48 @@ class Handler:
             'vc_type': vc_type,
             'reason': 'Учреждение имеет право выпускать данный тип документов',
         }, True
+
+    def handle_credential_modification_request(self, message):
+        try:
+            role = "ENDORSER"
+            seed, alias = message.get('seed'), message.get('alias')
+
+            did_response, ok = self.admin_provider.register_did(
+                request={
+                    "method": "sov",
+                    "options": {"key_type": "ed25519"},
+                    "seed": seed,
+                }
+            )
+            if not ok:
+                logging.error(f"Ошибка создания DID: {did_response}")
+
+                return {}, False
+
+            institution_did = did_response["result"]["did"]
+            verkey = did_response["result"]["verkey"]
+
+            nym_response, ok = self.admin_provider.register_nym(
+                request={
+                    "did": institution_did,
+                    "verkey": verkey,
+                    "alias": alias,
+                    "role": role
+                }
+            )
+            if not ok:
+                logging.error(f"Ошибка регистрации NYM: {nym_response}")
+
+            logging.info(f"DID {institution_did} зарегистрирован для {alias}")
+
+            transaction_id = nym_response.get('transaction_id')
+
+            return {
+                'did': institution_did,
+                'verkey': verkey,
+                'transaction_id': transaction_id
+            }, True
+
+        except Exception as e:
+            logging.error(f"Исключение при регистрации DID: {str(e)}")
+            return {}, False
