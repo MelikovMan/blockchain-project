@@ -1,3 +1,6 @@
 logs/
 .idea
 __pachache__/
+documents/Hospital.db
+documents/protocol.pdf
+documents/DataBase/__pycache__
