@@ -2,3 +2,4 @@ logs/
 .idea
 documents/Hospital.db
 documents/protocol.pdf
+documents/DataBase/__pycache__
