@@ -219,6 +219,14 @@ class Handler:
 
             return True
 
+        if state in ("request-received", "done"):
+            record, ok = self.admin_provider.credential_issue(cred_ex_id)
+            if not ok:
+                logging.error(f"Failed to get cred record for {cred_ex_id}: {record}")
+                return False
+
+            return True
+
         return True
 
     # -------------------- Public API (called from HttpAdapter) --------------------
