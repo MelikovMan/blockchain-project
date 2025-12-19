@@ -116,3 +116,7 @@ class AdminProvider:
     def cred_def_create(self, cred_def_body: dict) -> Tuple[Any, bool]:
         path = self.cfg.Endpoints.CredDefCreate.Path
         return send_request(self.cfg.Endpoints.CredDefCreate.Method, self.url + path, self.headers, cred_def_body)
+
+    def credential_issue(self, cred_ex_id: str) -> Tuple[Any, bool]:
+        path = self.cfg.Endpoints.CredentiaIssue.Path.replace("{cred_ex_id}", cred_ex_id)
+        return send_request(self.cfg.Endpoints.CredentiaIssue.Method, self.url + path, self.headers)

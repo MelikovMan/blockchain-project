@@ -26,6 +26,7 @@ class AdminProviderEndpoints(BaseModel):
 
     CredentialSendRequest: Endpoint
     CredentialGetRecord: Endpoint
+    CredentialIssue: Endpoint
 
     SchemaCreated: Endpoint
     SchemaCreate: Endpoint

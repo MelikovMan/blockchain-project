@@ -61,6 +61,9 @@ Adapters:
         CredentialGetRecord:
           Path: "/issue-credential-2.0/records/{cred_ex_id}"
           Method: "GET"
+        CredentialIssue:
+          Path: "/issue-credential-2.0/records/{cred_ex_id}/issue"
+          Method: "POST"
 
         # Indy-операции для регистрации схем/cred-def (используйте ТОЛЬКО после проверки разрешения у регулятора)
         SchemaCreated:
