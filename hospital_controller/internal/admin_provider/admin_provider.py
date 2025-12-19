@@ -54,7 +54,7 @@ class AdminProvider:
     def create_invitation(self, alias: str, use_did_method: str = "did:peer:4") -> Tuple[Any, bool]:
         body = {
             "use_did_method": use_did_method,
-            "handshake_protocols": ["https://didcomm.org/didexchange/1.1"],
+            "handshake_protocols": ["https://didcomm.org/didexchange/1.1"], #TODO: если использовать use_did_method did:peer:2, версия 1.0
             "alias": alias,
             "auto_accept": True,
         }
