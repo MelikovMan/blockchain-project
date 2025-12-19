@@ -169,6 +169,38 @@ def generate_medical_pdf(
     doc.build(story)
     print(f"PDF '{output_file}' успешно создан")
 
+def populate_test_data():
+    with HospitalDBManager() as db_manager:
+        # Добавляем новую больницу
+        # раскоментите для добавления больницы и узи
+        new_hospital_did = db_manager.add_hospital(
+        hospital_did=3,
+        name="Областной диагностический центр",
+        vc_type=1,
+        endpoint="https://odc.ru/api/Hospital",
+        )
+
+        new_record = {
+            'vc': 1,
+            'data_isl': '2024-01-18 11:00:00',
+            'number_protocol': 2024004,
+            'FIO': 'Смирнова Ольга Васильевна',
+            'gender': 'Ж',
+            'date_birth': '1988-05-12 00:00:00',
+            'number_med_card': 901234,
+            'napr_otd': 'Урологическое отделение',
+            'vid_issled': 'УЗИ почек и мочевого пузыря',
+            'vc_type': 1,
+            'scaner': 'Toshiba Aplio 500',
+            'datchik': 'Конвексный 3.5 МГц',
+            'opisanie': 'Исследование почек в поперечной и продольной плоскостях. Оценка размеров, структуры, наличия конкрементов.',
+            'zakl': 'Почки обычных размеров и структуры. Конкрементов не выявлено.',
+           'fio_vrach': 'Иванов П.К.',
+            'hospital_did': new_hospital_did
+        }
+        base_name = "UZI"
+        db_manager.add_record(base_name, new_record)
+
 def main():
     with HospitalDBManager() as db_manager:
         # Добавляем новую больницу

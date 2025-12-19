@@ -41,6 +41,47 @@ def generate_and_publish_did():
         print(f"Ошибка связывания с публичным DiD")
         return False
     return True
+
+
+def create_cred_def(schema_body, revokable=False, tag="default"):
+    """
+    Регестрирует credential по данной схеме.
+    """
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name={schema_body["schema_name"]}",headers=HEADERS)
+    if schema_find.json()["schema_ids"]:
+        print("Схема уже существует")
+        schema_result = schema_find.json()
+        schema_id = schema_result["schema_ids"][0]
+    else:
+        # 1. Создание схемы
+        schema_resp = requests.post(f"{AGENT_ADMIN_URL}/schemas", headers=HEADERS, json=schema_body)
+        if schema_resp.status_code != 200:
+            logging.error(f"Ошибка создания схемы: {schema_resp.text}")
+            return None
+
+        schema_result = schema_resp.json()
+        schema_id = schema_result["schema_id"]
+    # 1. Проверка существования схемы кредов
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name={schema_body["schema_name"]}", headers=HEADERS)
+    if cred_def_find.json()["credential_definition_ids"]:
+        print("Определение VC уже существует")
+        cred_result = cred_def_find.json()
+        return cred_result["credential_definition_ids"][0]
+
+    # 2. Создание определения учетных данных на основе схемы
+    cred_def_body = {
+        "schema_id": schema_id,
+        "support_revocation": False,
+        "tag": tag
+    }
+    #TODO: Switch if revokable
+    cred_def_resp = requests.post(f"{AGENT_ADMIN_URL}/credential-definitions", headers=HEADERS, json=cred_def_body)
+    if cred_def_resp.status_code != 200:
+        logging.error(f"Ошибка создания cred def: {cred_def_resp.text}")
+        return None
+
+    return cred_def_resp.json()["credential_definition_id"]
+
 def create_schema_and_cred_def():
     """
     Шаг 1: Регистрация схемы и определения учетных данных в блокчейне.
@@ -58,40 +99,17 @@ def create_schema_and_cred_def():
             "chronic_diagnoses"
         ]
     }
-    # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord25",headers=HEADERS)
-    if schema_find.json()["schema_ids"]:
-        print("Схема уже существует")
-        schema_result = schema_find.json()
-        schema_id = schema_result["schema_ids"][0]
-    else:
-        # 1. Создание схемы
-        schema_resp = requests.post(f"{AGENT_ADMIN_URL}/schemas", headers=HEADERS, json=schema_body)
-        if schema_resp.status_code != 200:
-            logging.error(f"Ошибка создания схемы: {schema_resp.text}")
-            return None
+    schema_body_links = {
+        "schema_name": "HospitalMedicalRecordLink",
+        "schema_version": "1.0.0",
+        "attributes": [
+            "link",
+            "metadata"
 
-        schema_result = schema_resp.json()
-        schema_id = schema_result["schema_id"]
-    # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord25", headers=HEADERS)
-    if cred_def_find.json()["credential_definition_ids"]:
-        print("Определение VC уже существует")
-        cred_result = cred_def_find.json()
-        return cred_result["credential_definition_ids"][0]
-
-    # 2. Создание определения учетных данных на основе схемы
-    cred_def_body = {
-        "schema_id": schema_id,
-        "support_revocation": False,
-        "tag": "default"
+        ]
     }
-    cred_def_resp = requests.post(f"{AGENT_ADMIN_URL}/credential-definitions", headers=HEADERS, json=cred_def_body)
-    if cred_def_resp.status_code != 200:
-        logging.error(f"Ошибка создания cred def: {cred_def_resp.text}")
-        return None
-
-    return cred_def_resp.json()["credential_definition_id"]
+    
+    return [create_cred_def(schema_body), create_cred_def(schema_body_links)]
 def handle_connection_webhook(message):
     """Обработка вебхуков соединений"""
     state = message.get('state')
@@ -549,7 +567,7 @@ if __name__ == '__main__':
     
     CRED_DEF_ID = create_schema_and_cred_def()
     if CRED_DEF_ID:
-        print(f"[INFO] Cred Def ID зарегистрирован: {CRED_DEF_ID}")
+        print(f"[INFO] Cred Def ID зарегистрированы: {CRED_DEF_ID}")
         app.run(port=8050, debug=True)
     else:
         print("[ERROR] Не удалось инициализировать агента. Проверьте сеть Indy.")
