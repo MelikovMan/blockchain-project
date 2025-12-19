@@ -212,9 +212,7 @@ class Handler:
 
         return None, False
 
-    def credential_issuance_requests_approve(self, message):
-        request_id = message.get('request_id')
-
+    def credential_issuance_requests_approve(self, message, request_id):
         sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
         cir, ok = self.repo.execute_and_fetch(sql, request_id)
@@ -252,9 +250,7 @@ class Handler:
             'notification_sent': ok
         }, True
 
-    def credential_issuance_requests_reject(self, message):
-        request_id = message.get('request_id')
-
+    def credential_issuance_requests_reject(self, message, request_id):
         sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
         cir, ok = self.repo.execute_and_fetch(sql, request_id)

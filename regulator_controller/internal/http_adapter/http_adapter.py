@@ -59,19 +59,19 @@ class HttpAdapter(object):
 
         return jsonify(resp), 200
 
-    def credential_issuance_requests_approve(self):
+    def credential_issuance_requests_approve(self, request_id):
         message = request.json
 
-        resp, ok = self.handler.credential_issuance_requests_approve(message)
+        resp, ok = self.handler.credential_issuance_requests_approve(message, request_id)
         if not ok:
             return jsonify({"status": "failed"}), 500
 
         return jsonify(resp), 200
 
-    def credential_issuance_requests_reject(self):
+    def credential_issuance_requests_reject(self, request_id):
         message = request.json
 
-        resp, ok = self.handler.credential_issuance_requests_reject(message)
+        resp, ok = self.handler.credential_issuance_requests_reject(message, request_id)
         if not ok:
             return jsonify({"status": "failed"}), 500
 
