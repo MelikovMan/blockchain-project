@@ -12,9 +12,9 @@ config = cfg.Config
 config = config_parse.get_config(config)
 
 admin_provider = AdminProvider(config.Adapters.Secondary.AdminProvider)
-#regulator_repo = RegulatorRepo(config.Adapters.Secondary.RegulatorRepo)
+regulator_repo = RegulatorRepo(config.Adapters.Secondary.RegulatorRepo)
 
-handler = Handler(admin_provider, None)
+handler = Handler(admin_provider, regulator_repo)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +24,8 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# handler.get_samples()
 
 http_adapter = run_http_adapter(
     handler=handler,

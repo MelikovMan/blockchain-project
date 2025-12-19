@@ -9,10 +9,10 @@ Adapters:
     Secondary:
         RegulatorRepo:
             Name: "regulator"
-            Host: "http://localhost"
-            Port: 25565 #to fix
-            User: "user-name" #to fix
-            Password: "password" #to fix
+            Host: "localhost"
+            Port: 5555 #to fix
+            User: "postgres" #to fix
+            Password: "postgres" #to fix
             Type: "postgres"
 
         AdminProvider:

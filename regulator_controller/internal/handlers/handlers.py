@@ -83,9 +83,9 @@ class Handler:
                 logging.error(f"Неполные данные в запросе на выпуск VC: {message_data}")
                 return
 
-            sql = f'SELECT * FROM public."REGISTERED_INSTITUTIONS" WHERE institution_did={hospital_did}'
+            sql = 'SELECT * FROM public."REGISTERED_INSTITUTIONS" WHERE institution_did=%s'
 
-            found_institution, ok = self.repo.execute_and_fetch(sql)
+            found_institution, ok = self.repo.execute_and_fetch(sql, hospital_did)
             if not ok:
                 logging.error(f"Учреждение с DID {hospital_did} не найдено")
 
@@ -101,11 +101,12 @@ class Handler:
                 return False
 
             request_id = str(uuid.uuid4())
+            request_date = datetime.now().date().isoformat()
 
-            sql = (f'INSERT INTO public."CREDENTIAL_ISSUANCE_REQUESTS" (request_id, institution_did, vc_type, request_date) VALUES '
-                   f'({request_id},{hospital_did},{credential_type},{datetime.now().isoformat()})')
+            sql = ('INSERT INTO public."CREDENTIAL_ISSUANCE_REQUESTS" (request_id, institution_did, vc_type, request_date) VALUES '
+                   '(%s,%s,%s,%s::date)')
 
-            ok = self.repo.execute(sql)
+            ok = self.repo.execute(sql, (request_id, hospital_did, credential_type, request_date))
             if not ok:
                 logging.error(f"Ошибка с DID {hospital_did}")
 
@@ -214,24 +215,24 @@ class Handler:
     def credential_issuance_requests_approve(self, message):
         request_id = message.get('request_id')
 
-        sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id={request_id}'
+        sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
-        cir, ok = self.repo.execute_and_fetch(sql)
-        if not cir.get('institution_did'):
+        cir, ok = self.repo.execute_and_fetch(sql, request_id)
+        if not cir[0].get('institution_did'):
             return {}, False
 
-        date_approve = datetime.now().isoformat()
-        sql = 'UPDATE CREDENTIAL_ISSUANCE_REQUESTS SET approved_date={date_approve} WHERE request_id={request_id}'
+        date_approve = datetime.now().date().isoformat()
+        sql = f'UPDATE CREDENTIAL_ISSUANCE_REQUESTS SET approved_date=%s::date WHERE request_id=%s'
 
-        ok = self.repo.execute(sql)
+        ok = self.repo.execute(sql, (date_approve, request_id))
         if not ok:
             return {}, False
 
-        institution_did = cir.get('institution_did')
-        vc_type = cir.get('vc_type')
+        institution_did = cir[0].get('institution_did')
+        vc_type = cir[0].get('vc_type')
 
-        sql = 'INSERT INTO public."CREDENTIAL_INSTITUTION_APPROVE" (institution_did, vc_type, date_approve) VALUES ({institution_did}, {vc_type}, {date_approve} ON CONFLICT DO NOTHING)'
-        ok = self.repo.execute(sql)
+        sql = 'INSERT INTO public."CREDENTIAL_INSTITUTION_APPROVE" (institution_did, vc_type, date_approve) VALUES (%s, %s, %s::date) ON CONFLICT DO NOTHING'
+        ok = self.repo.execute(sql, (institution_did, vc_type, date_approve))
         if not ok:
             return {}, False
 
@@ -254,16 +255,16 @@ class Handler:
     def credential_issuance_requests_reject(self, message):
         request_id = message.get('request_id')
 
-        sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id={request_id}'
+        sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
-        cir, ok = self.repo.execute_and_fetch(sql)
+        cir, ok = self.repo.execute_and_fetch(sql, request_id)
         if not cir.get('institution_did'):
             return {}, False
 
-        reject_date = datetime.now().isoformat()
-        sql = 'UPDATE CREDENTIAL_ISSUANCE_REQUESTS SET reject_date={reject_date} WHERE request_id={request_id}'
+        reject_date = datetime.now().date().isoformat()
+        sql = 'UPDATE CREDENTIAL_ISSUANCE_REQUESTS SET reject_date=%s::date WHERE request_id=%s'
 
-        ok = self.repo.execute(sql)
+        ok = self.repo.execute(sql, (reject_date, request_id))
         if not ok:
             return {}, False
 
@@ -286,14 +287,47 @@ class Handler:
             'notification_sent': ok
         }, True
 
+    def insert_sample(self):
+        institution_did = [1, 2, 3, 4, 5]
+        institution_type = ['Institution1', 'Institution2', 'Institution3', 'Institution4', 'Institution5']
+        institution_name = ['InstitutionName1', 'InstitutionName2', 'InstitutionName3', 'InstitutionName4', 'InstitutionName5']
+        registration_date = datetime.now().date().isoformat()
+
+        for i in range(0, len(institution_did)):
+            sql = 'INSERT INTO public."REGISTERED_INSTITUTIONS" (institution_did, institution_type, institution_name, registration_date) VALUES (%s, %s, %s, %s::date)'
+
+            params = (institution_did[i], institution_type[i], institution_name[i], registration_date)
+
+            ok = self.repo.execute(sql, params)
+            if not ok:
+                return False
+
+        return True
+
+    def get_samples(self):
+        # institution_did = [1, 2, 3, 4, 5]
+        # institution_type = ['Institution1', 'Institution2', 'Institution3', 'Institution4', 'Institution5']
+        # institution_name = ['InstitutionName1', 'InstitutionName2', 'InstitutionName3', 'InstitutionName4', 'InstitutionName5']
+        # registration_date = datetime.now().date().isoformat()
+
+        sql = 'select * from public."REGISTERED_INSTITUTIONS"'
+
+        result, ok = self.repo.execute_and_fetch(sql)
+        if not ok:
+            return False
+
+        print(result)
+
+        return True
+
 
     def verify_institution_permission(self, message):
         hospital_did = message.get('hospital_did')
         vc_type = message.get('credential_type')
 
-        sql = f'SELECT * FROM public."REGISTERED_INSTITUTIONS" WHERE institution_did={hospital_did}'
+        sql = 'SELECT * FROM public."REGISTERED_INSTITUTIONS" WHERE institution_did=%s'
 
-        found_institutions, ok = self.repo.execute_and_fetch(sql)
+        found_institutions, ok = self.repo.execute_and_fetch(sql, hospital_did)
         if not ok:
             return {}, False
 
@@ -306,10 +340,10 @@ class Handler:
                 'reason': 'Учреждение не зарегистрировано'
             }, False
 
-        sql = 'SELECT * FROM public."CREDENTIAL_INSTITUTION_APPROVE" cia WHERE institution_did={institution_did} AND vc_type={vc_type} AND date_approve NOT NULL'
+        sql = 'SELECT * FROM public."CREDENTIAL_INSTITUTION_APPROVE" cia WHERE institution_did=%s AND vc_type=%s AND date_approve NOT NULL'
 
-        cir, ok = self.repo.execute_and_fetch(sql)
-        if not cir.get('institution_did'):
+        cir, ok = self.repo.execute_and_fetch(sql, (hospital_did, vc_type))
+        if len(cir) == 0 or not ok:
             logging.error(f"Не найден CREDENTIAL_INSTITUTION_APPROVE {hospital_did}")
             return {
                 'authorized': False,
