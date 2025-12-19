@@ -194,8 +194,8 @@ class Handler:
 
     def get_registered_institutions(self):
         sql = ('SELECT * FROM public."REGISTERED_INSTITUTIONS" ri '
-               'JOIN public."CREDENTIAL_INSTITUTION_APPROVE" cia on cia.institution_did=ri.institution_did'
-               'JOIN public."APPROVED_CREDENTIALS" ac on ac.vc_type=cia.vc_type')
+               'LEFT JOIN public."CREDENTIAL_INSTITUTION_APPROVE" cia on cia.institution_did=ri.institution_did'
+               ' LEFT JOIN public."APPROVED_CREDENTIALS" ac on ac.vc_type=cia.vc_type')
 
         institutions, ok = self.repo.execute_and_fetch(sql)
         if ok:
@@ -212,9 +212,7 @@ class Handler:
 
         return None, False
 
-    def credential_issuance_requests_approve(self, message):
-        request_id = message.get('request_id')
-
+    def credential_issuance_requests_approve(self, message, request_id):
         sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
         cir, ok = self.repo.execute_and_fetch(sql, request_id)
@@ -252,9 +250,7 @@ class Handler:
             'notification_sent': ok
         }, True
 
-    def credential_issuance_requests_reject(self, message):
-        request_id = message.get('request_id')
-
+    def credential_issuance_requests_reject(self, message, request_id):
         sql = 'SELECT * FROM public."CREDENTIAL_ISSUANCE_REQUESTS" WHERE request_id=%s'
 
         cir, ok = self.repo.execute_and_fetch(sql, request_id)
