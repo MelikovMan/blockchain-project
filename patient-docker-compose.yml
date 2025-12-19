@@ -14,8 +14,8 @@ services:
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
       - ACAPY_AUTO_PROVISION=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
-      - ACAPY_WEBHOOK_URL=http://172.17.0.1:8060/webhooks  # Автоматически сохранять принятые credentials
-      - ACAPY_NOTIFY_REVOCATION=true
+      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8060/webhooks  # Автоматически сохранять принятые credentials
+      - ACAPY_NOTIFY_REVOCATION=true 
     ports:
       - "8030:8030"
       - "8031:8031"

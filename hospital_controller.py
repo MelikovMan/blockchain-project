@@ -2,6 +2,7 @@ import requests
 import json
 import logging
 from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
@@ -47,7 +48,7 @@ def create_schema_and_cred_def():
     """
     
     schema_body = {
-        "schema_name": "HospitalMedicalRecord333",
+        "schema_name": "HospitalMedicalRecord25",
         "schema_version": "1.0.5",
         "attributes": [
             "full_name",
@@ -58,7 +59,7 @@ def create_schema_and_cred_def():
         ]
     }
     # 1. Проверка существования схемы
-    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord333",headers=HEADERS)
+    schema_find = requests.get(f"{AGENT_ADMIN_URL}/schemas/created?schema_name=HospitalMedicalRecord25",headers=HEADERS)
     if schema_find.json()["schema_ids"]:
         print("Схема уже существует")
         schema_result = schema_find.json()
@@ -73,7 +74,7 @@ def create_schema_and_cred_def():
         schema_result = schema_resp.json()
         schema_id = schema_result["schema_id"]
     # 1. Проверка существования схемы кредов
-    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord333", headers=HEADERS)
+    cred_def_find = requests.get(f"{AGENT_ADMIN_URL}/credential-definitions/created?=schema_name=HospitalMedicalRecord25", headers=HEADERS)
     if cred_def_find.json()["credential_definition_ids"]:
         print("Определение VC уже существует")
         cred_result = cred_def_find.json()
@@ -102,10 +103,10 @@ def handle_connection_webhook(message):
     
     elif state == 'request':
         logging.info(f"📥 Получен запрос на соединение от: {their_label}, ID: {connection_id}")
-        # Автоматически принимаем запрос на соединение
+        # Автоматически принимаем запрос на соединение с использованием DID Exchange
         try:
             accept_response = requests.post(
-                f"{AGENT_ADMIN_URL}/connections/{connection_id}/accept-request",
+                f"{AGENT_ADMIN_URL}/didexchange/{connection_id}/accept-request",
                 headers=HEADERS,
                 json={}
             )
@@ -136,7 +137,7 @@ def handle_connection_webhook(message):
 def handle_issue_credential_webhook(message):
     """Обработка вебхуков выпуска учетных данных"""
     state = message.get('state')
-    cred_ex_id = message.get('credential_exchange_id')
+    cred_ex_id = message.get('cred_ex_id')
     connection_id = message.get('connection_id')
     
     # Сохраняем информацию об обмене
@@ -146,25 +147,25 @@ def handle_issue_credential_webhook(message):
     CREDENTIAL_EXCHANGES[cred_ex_id]['state'] = state
     CREDENTIAL_EXCHANGES[cred_ex_id]['connection_id'] = connection_id
     
-    if state == 'proposal_received':
+    if state == 'proposal-received':
         logging.info(f"📋 Получено предложение учетных данных: {cred_ex_id}")
         # Можно автоматически отправить оффер в ответ
         send_credential_offer(cred_ex_id)
     
-    elif state == 'offer_sent':
+    elif state == 'offer-sent':
         logging.info(f"📤 Предложение учетных данных отправлено: {cred_ex_id}")
     
-    elif state == 'request_received':
+    elif state == 'request-received':
         logging.info(f"📥 Получен запрос на учетные данные: {cred_ex_id}")
         # Автоматически выпускаем учетные данные
         issue_credential(cred_ex_id)
     
-    elif state == 'credential_issued':
+    elif state == 'credential-issued':
         logging.info(f"✅ Учетные данные выпущены: {cred_ex_id}")
         # Обновляем статус в нашей системе
         update_credential_status(cred_ex_id, 'issued')
     
-    elif state == 'credential_acked':
+    elif state == 'credential-acked':
         logging.info(f"🎉 Учетные данные подтверждены пациентом: {cred_ex_id}")
         # Справка успешно доставлена и сохранена
         update_credential_status(cred_ex_id, 'delivered')
@@ -183,28 +184,28 @@ def handle_issue_credential_webhook(message):
 def handle_present_proof_webhook(message):
     """Обработка вебхуков верификации доказательств"""
     state = message.get('state')
-    pres_ex_id = message.get('presentation_exchange_id')
+    pres_ex_id = message.get('pres_ex_id')
     connection_id = message.get('connection_id', '')
-    if state == 'request_sent':
+    if state == 'request-sent':
         logging.info(f"📤 Запрос на доказательство отправлен: {pres_ex_id}")
     
-    elif state == 'presentation_received':
+    elif state == 'presentation-received':
         logging.info(f"📥 Получено доказательство: {pres_ex_id}")
         # Можно автоматически верифицировать
         verify_presentation(pres_ex_id)
     
-    elif state == 'verified':
+    elif state == 'done':
         logging.info(f"✅ Доказательство верифицировано: {pres_ex_id}")
         # Извлекаем раскрытые атрибуты
         logging.info(message)
         try:
             detail_resp = requests.get(
-                f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}",
+                f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}",
                 headers=HEADERS
             )
             
             if detail_resp.status_code == 200:
-                presentation_details = detail_resp.json()["presentation"]
+                presentation_details = detail_resp.json()["by_format"]["pres"]["indy"]
                 
                 # Теперь извлекаем revealed_attrs из деталей
                 proof = presentation_details.get('requested_proof', {})
@@ -260,7 +261,7 @@ def get_presentation_credentials_data(pres_ex_id, connection_id):
     try:
         # Получаем список credentials для этой презентации
         creds_resp = requests.get(
-            f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/credentials",
+            f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/credentials",
             headers=HEADERS
         )
         
@@ -298,7 +299,7 @@ def send_credential_offer(cred_ex_id):
     """Отправляет оффер учетных данных в ответ на предложение"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/send-offer",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/send-offer",
             headers=HEADERS,
             json={}
         )
@@ -313,7 +314,7 @@ def issue_credential(cred_ex_id):
     """Выпускает учетные данные"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/records/{cred_ex_id}/issue",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/records/{cred_ex_id}/issue",
             headers=HEADERS,
             json={"comment": "Медицинская справка выпущена"}
         )
@@ -328,7 +329,7 @@ def verify_presentation(pres_ex_id):
     """Верифицирует полученное доказательство"""
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/present-proof/records/{pres_ex_id}/verify-presentation",
+            f"{AGENT_ADMIN_URL}/present-proof-2.0/records/{pres_ex_id}/verify-presentation",
             headers=HEADERS,
             json={}
         )
@@ -350,7 +351,7 @@ def auto_issue_credential(connection_id, patient_id):
     credential_offer = {
         "connection_id": connection_id,
         "credential_preview": {
-            "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
+            "@type": "issue-credential/2.0/credential-preview",
             "attributes": [
                 {"name": "full_name", "value": patient_data["full_name"]},
                 {"name": "date_of_birth", "value": patient_data["date_of_birth"]},
@@ -359,12 +360,16 @@ def auto_issue_credential(connection_id, patient_id):
                 {"name": "chronic_diagnoses", "value": json.dumps(patient_data["chronic_diagnoses"], ensure_ascii=False)}
             ]
         },
-        "cred_def_id": CRED_DEF_ID
+        "filter": {
+            "indy": {
+                "cred_def_id": CRED_DEF_ID 
+            }
+    },
     }
     
     try:
         response = requests.post(
-            f"{AGENT_ADMIN_URL}/issue-credential/send-offer",
+            f"{AGENT_ADMIN_URL}/issue-credential-2.0/send-offer",
             headers=HEADERS,
             json=credential_offer
         )
@@ -395,10 +400,10 @@ def handle_hospital_webhooks(topic):
     if topic == 'connections':
         handle_connection_webhook(message)
     
-    elif topic == 'issue_credential':
+    elif topic == 'issue_credential_v2_0':
         handle_issue_credential_webhook(message)
     
-    elif topic == 'present_proof':
+    elif topic == 'present_proof_v2_0':
         handle_present_proof_webhook(message)
     
     elif topic == 'endorsements':
@@ -433,7 +438,7 @@ def issue_medical_credential():
     credential_offer = {
         "connection_id": connection_id,
         "credential_preview": {
-            "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview",
+            "@type": "issue-credential/2.0/credential-preview",
             "attributes": [
                 {"name": "full_name", "value": patient_data["full_name"]},
                 {"name": "date_of_birth", "value": patient_data["date_of_birth"]},
@@ -442,11 +447,15 @@ def issue_medical_credential():
                 {"name": "chronic_diagnoses", "value": json.dumps(patient_data["chronic_diagnoses"], ensure_ascii=False)}
             ]
         },
-        "cred_def_id": CRED_DEF_ID # ID, полученный при создании cred def
+        "filter": {
+            "indy": {
+                "cred_def_id": CRED_DEF_ID 
+            }
+    },
     }
 
     # 3. Отправляем предложение агенту через административный API
-    issue_resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential/send-offer", headers=HEADERS, json=credential_offer)
+    issue_resp = requests.post(f"{AGENT_ADMIN_URL}/issue-credential-2.0/send-offer", headers=HEADERS, json=credential_offer)
 
     if issue_resp.status_code != 200:
         logging.error(f"Ошибка отправки оффера: {issue_resp.text}")
@@ -481,19 +490,53 @@ def verify_emergency_proof():
     }
 
     # 3. Отправляем запрос на доказательство
-    proof_resp = requests.post(f"{AGENT_ADMIN_URL}/present-proof/send-request", headers=HEADERS, json=proof_request)
+    proof_resp = requests.post(f"{AGENT_ADMIN_URL}/present-proof-2.0/send-request", headers=HEADERS, json=proof_request)
 
     if proof_resp.status_code != 200:
         return jsonify({"error": "Не удалось отправить запрос на верификацию"}), 500
 
     # 4. Ответ содержит идентификатор презентации, статус которой нужно проверять асинхронно
-    presentation_exchange_id = proof_resp.json()["presentation_exchange_id"]
+    presentation_exchange_id = proof_resp.json()["pres_ex_id"]
     return jsonify({"presentation_exchange_id": presentation_exchange_id}), 200
-
+@app.route('/create-invitation', methods=['POST'])
+def create_invitation():
+    """
+    Создание приглашения с использованием Qualified DID (did:peer:4)
+    """
+    # Параметры запроса
+    use_did_method = request.json.get('use_did_method', 'did:peer:4')
+    handshake_protocols = request.json.get('handshake_protocols', 
+                                          ['"https://didcomm.org/didexchange/1.1"'])
+    
+    invitation_body = {
+        "use_did_method": use_did_method,
+        "handshake_protocols": handshake_protocols,
+        "alias": "City Hospital",
+        "auto_accept": True
+    }
+    
+    # Создание OOB приглашения
+    invitation_resp = requests.post(
+        f"{AGENT_ADMIN_URL}/out-of-band/create-invitation",
+        headers=HEADERS,
+        json=invitation_body
+    )
+    
+    if invitation_resp.status_code != 200:
+        logging.error(f"Ошибка создания приглашения: {invitation_resp.text}")
+        return jsonify({"error": "Не удалось создать приглашение"}), 500
+    
+    invitation_data = invitation_resp.json()
+    return jsonify({
+        "invitation": invitation_data.get("invitation"),
+        "invitation_url": invitation_data.get("invitation_url"),
+        "connection_id": invitation_data.get("connection_id")
+    }), 200
 # Глобальная переменная для ID определения учетных данных
 CRED_DEF_ID = None
 
 if __name__ == '__main__':
+    os.makedirs('logs', exist_ok=True)
     logging.basicConfig(filename='logs/hospital.log', level=logging.INFO,encoding='utf-8')
     # При старте регистрируем схему в блокчейне (в продакшене это делается отдельно)
     if (requests.get(f"{AGENT_ADMIN_URL}/wallet/did",headers=HEADERS).json()["results"] and requests.get(f"{AGENT_ADMIN_URL}/wallet/did/public",headers=HEADERS).json()["result"]):
