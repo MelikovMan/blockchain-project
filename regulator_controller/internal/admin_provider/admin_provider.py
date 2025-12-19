@@ -54,9 +54,6 @@ class AdminProvider:
         return ok
 
     def register_did(self, request) -> (any, bool):
-
-        #request = domain.RegisterDIDRequest(method="sov", options={"key_type": "ed25519"}, seed=seed)
-
         content, ok = send_request(
             method=self.cfg.Endpoints.RegisterDID.Method,
             url=self.url + self.cfg.Endpoints.RegisterDID.Path,
@@ -69,20 +66,6 @@ class AdminProvider:
         return content, True
 
     def register_nym(self, request) -> (any, bool):
-
-        # json = {
-        #     "did": institution_did,
-        #     "verkey": did_result["result"]["verkey"],
-        #     "alias": alias,
-        #     "role": role
-        # }
-
-        # return {
-        #     'did': institution_did,
-        #     'verkey': did_result["result"]["verkey"],
-        #     'transaction_id': nym_response.json().get('transaction_id')
-        # }
-
         content, ok = send_request(
             method=self.cfg.Endpoints.RegisterNYM.Method,
             url=self.url + self.cfg.Endpoints.RegisterNYM.Path,
