@@ -12,7 +12,7 @@ services:
       - ACAPY_ADMIN_API_KEY=regulator-admin-key-789
       
       # Публичный DID регулятора (главный эндоузер в сети)
-      - ACAPY_WALLET_SEED=state_regulator_seed_000000001
+      - ACAPY_WALLET_SEED=state_regulator_seed_00000000001
       - ACAPY_ENDORSER_ROLE=ENDORSER
       
       # Кошелек
@@ -20,7 +20,7 @@ services:
       - ACAPY_WALLET_NAME=StateRegulatorWallet
       
       # Сеть Indy
-      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
+      - ACAPY_GENESIS_URL=http://172.17.0.1:9000/genesis
       
       # Транспорты
       - ACAPY_ENDPOINT=http://regulator-agent:8040
@@ -37,7 +37,7 @@ services:
       - ACAPY_AUTO_ENDORSE_TRANSACTIONS=true  # Автоматически подписываем транзакции от одобренных учреждений
       
       # Webhook для контроллера регулятора
-      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8070/webhooks
+      - ACAPY_WEBHOOK_URL=http://172.17.0.1:8070/webhooks
       
       # Конфигурация для управления транзакциями
       - ACAPY_ENDORSER_CONNECTION_ID_AUTO_ACCEPT=true
@@ -51,7 +51,8 @@ services:
       - "8040:8040"  # Для сообщений между агентами
       - "8041:8041"  # Административный API
     volumes:
-      - regulator_wallet_data:/home/indy/.indy_client/wallet
+      - regulator_wallet_data:/home/aries/.acapy_agent/wallet/StateRegulatorWallet
+    user: root
     command: >
       start
       --endpoint http://regulator-agent:8040

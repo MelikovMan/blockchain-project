@@ -1,0 +1,37 @@
+App:
+    Name: "regulator_controller"
+    Version: "1.0.0"
+
+Adapters:
+    Primary:
+        HttpAdapter:
+            Port: 8070
+    Secondary:
+        RegulatorRepo:
+            Name: "regulator"
+            Host: "http://localhost"
+            Port: 25565 #to fix
+            User: "user-name" #to fix
+            Password: "password" #to fix
+            Type: "postgres"
+
+        AdminProvider:
+            Host: "http://localhost"
+            Port: 8041
+            APIKey: "regulator-admin-key-789"
+            Endpoints:
+                AcceptConnection:
+                    Path: "/connections/{connection_id}accept-request"
+                    Method: "POST"
+                EndorseTransaction:
+                    Path: "/endorse-transaction/{transaction_id}/endorse"
+                    Method: "POST"
+                RegisterDID:
+                    Path: "/wallet/did/create"
+                    Method: "POST"
+                RegisterNYM:
+                    Path: "/ledger/register-nym"
+                    Method: "POST"
+                SendMessage:
+                    Path: "/connections/{connection_id}/send-message"
+                    Method: "POST"

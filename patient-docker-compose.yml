@@ -9,26 +9,24 @@ services:
       - ACAPY_ADMIN=["0.0.0.0", "8031"]
       - ACAPY_ADMIN_IN_KEY=patient-admin-key-456
       - ACAPY_WALLET_KEY=StrongPatientWalletKey456
-      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
+      - ACAPY_GENESIS_URL=http://172.17.0.1:9000/genesis
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8030"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
       - ACAPY_AUTO_PROVISION=true
       - ACAPY_AUTO_ACCEPT_INVITES=true
-      - ACAPY_AUTO_ACCEPT_REQUESTS=true
-      - ACAPY_AUTO_STORE_CREDENTIAL=true
-      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8060/webhooks  # Автоматически сохранять принятые credentials
+      - ACAPY_WEBHOOK_URL=http://172.17.0.1:8060/webhooks  # Автоматически сохранять принятые credentials
+      - ACAPY_NOTIFY_REVOCATION=true
     ports:
       - "8030:8030"
       - "8031:8031"
     volumes:
-      - patient_wallet_data:/home/indy/.indy_client/wallet
+      - patient_wallet_data:/home/aries/.acapy_agent/wallet/AlicePatientWallet
+    user: root
     command: >
       start --wallet-name AlicePatientWallet
             --wallet-key StrongPatientWalletKey456
             --admin-api-key patient-admin-key-456
             --auto-provision
             --auto-accept-invites
-            --auto-accept-requests
-            --auto-store-credential
 volumes:
   patient_wallet_data:
