@@ -27,9 +27,10 @@ class RegulatorRepo:
         if self.connection:
             self.connection.close()
 
-    def execute_and_fetch(self, sql):
+    def execute_and_fetch(self, sql, params=None):
         if self.connection:
-            self.cursor.execute(sql)
+            self.cursor.execute(sql, params)
+            self.connection.commit()
             result = self.cursor.fetchall()
 
             columns = [col[0] for col in self.cursor.description]
@@ -37,9 +38,10 @@ class RegulatorRepo:
 
         return None, False
 
-    def execute(self, sql):
+    def execute(self, sql, params):
         if self.connection:
-            self.cursor.execute(sql)
+            self.cursor.execute(sql, params)
+            self.connection.commit()
 
             return True
 

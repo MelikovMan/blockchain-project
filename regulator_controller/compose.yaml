@@ -1,0 +1,23 @@
+services:
+  postgres_regulator:
+    container_name: postgres_regulator
+    build:
+      context: postgres
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+    volumes:
+      - "postgres:/var/lib/postgresql/data"
+    ports:
+      - 5555:5432
+    networks:
+      - postgres_regulator
+
+networks:
+  postgres_regulator:
+    name: postgres_regulator
+
+volumes:
+  postgres:
