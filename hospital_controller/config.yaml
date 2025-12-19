@@ -1,0 +1,77 @@
+App:
+  Name: "hospital_controller"
+  Version: "1.0.0"
+
+# Параметры удалённого регулятора (нужны только для идентификации соединения)
+Regulator:
+  DID: "did:sov:REGULATOR_PUBLIC_DID_PLACEHOLDER"
+  Alias: "REGULATOR"
+
+Adapters:
+  Primary:
+    HttpAdapter:
+      Port: 8050
+
+  Secondary:
+    # Хранилище (PostgreSQL) для данных больницы: зарегистрированный DID, разрешения (VC от регулятора), документы и т.д.
+    RegulatorRepo:
+      Name: "hospital"
+      Host: "localhost"
+      Port: 5432
+      User: "hospital"
+      Password: "hospital"
+      Type: "postgres"
+      InitSchema: true
+
+    # Админ API ACA-Py агента больницы
+    AdminProvider:
+      Host: "http://localhost"
+      Port: 8021
+      APIKey: "super-secret-admin-api-key-123"
+      DIDSeed: "very_strong_hospital_seed0000000"
+      Endpoints:
+        AcceptConnection:
+          Path: "/didexchange/{connection_id}/accept-request"
+          Method: "POST"
+        CreateInvitation:
+          Path: "/out-of-band/create-invitation"
+          Method: "POST"
+        WalletCreateDID:
+          Path: "/wallet/did/create"
+          Method: "POST"
+        WalletSetPublicDID:
+          Path: "/wallet/did/public?did={did}"
+          Method: "POST"
+        SendMessage:
+          Path: "/connections/{connection_id}/send-message"
+          Method: "POST"
+
+        # present-proof-2.0 (больница — prover)
+        ProofGetCredentials:
+          Path: "/present-proof-2.0/records/{pres_ex_id}/credentials"
+          Method: "GET"
+        ProofSendPresentation:
+          Path: "/present-proof-2.0/records/{pres_ex_id}/send-presentation"
+          Method: "POST"
+
+        # issue-credential-2.0 (больница — holder)
+        CredentialSendRequest:
+          Path: "/issue-credential-2.0/records/{cred_ex_id}/send-request"
+          Method: "POST"
+        CredentialGetRecord:
+          Path: "/issue-credential-2.0/records/{cred_ex_id}"
+          Method: "GET"
+
+        # Indy-операции для регистрации схем/cred-def (используйте ТОЛЬКО после проверки разрешения у регулятора)
+        SchemaCreated:
+          Path: "/schemas/created?schema_name={schema_name}"
+          Method: "GET"
+        SchemaCreate:
+          Path: "/schemas"
+          Method: "POST"
+        CredDefCreated:
+          Path: "/credential-definitions/created?schema_id={schema_id}"
+          Method: "GET"
+        CredDefCreate:
+          Path: "/credential-definitions"
+          Method: "POST"
