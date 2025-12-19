@@ -23,6 +23,7 @@ class AdminProviderEndpoints(BaseModel):
 
     ProofGetCredentials: Endpoint
     ProofSendPresentation: Endpoint
+    ProofVerifyPresentation: Endpoint
 
     CredentialSendRequest: Endpoint
     CredentialGetRecord: Endpoint

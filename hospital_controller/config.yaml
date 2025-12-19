@@ -53,6 +53,9 @@ Adapters:
         ProofSendPresentation:
           Path: "/present-proof-2.0/records/{pres_ex_id}/send-presentation"
           Method: "POST"
+        ProofVerifyPresentation:
+          Path: "/present-proof-2.0/records/{pres_ex_id}/verify-presentation"
+          Method: "POST"
 
         # issue-credential-2.0 (больница — holder)
         CredentialSendRequest:

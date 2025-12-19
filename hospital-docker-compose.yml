@@ -9,7 +9,7 @@ services:
       - ACAPY_ADMIN=["0.0.0.0", "8021"]
       - ACAPY_ADMIN_API_KEY=super-secret-admin-api-key-123
       - ACAPY_WALLET_KEY=VeryStrongHospitalWalletKey
-      - ACAPY_GENESIS_URL=http://172.17.0.1:9000/genesis
+      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
       - ACAPY_ENDPOINT=http://hospital-agent:8020
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8020"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
@@ -21,7 +21,7 @@ services:
       - ACAPY_AUTO_STORE_CREDENTIAL=true
       
       # Webhook для получения транзакций на подпись от регулятора
-      - ACAPY_WEBHOOK_URL=http://172.17.0.1:8050/webhooks
+      - ACAPY_WEBHOOK_URL=http://host.docker.internal:8050/webhooks
       
       # Включение протокола эндоузинга для работы с регулятором
       - ACAPY_ENDORSER_PROTOCOL_ROLE=endorser

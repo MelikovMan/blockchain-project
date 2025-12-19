@@ -133,6 +133,14 @@ class Handler:
 
         logging.info(f"[Hospital Proof] state={state} pres_ex_id={pres_ex_id}")
 
+        if state == "presentation-received":
+            record, ok = self.admin_provider.proof_verify_presentation(pres_ex_id)
+            if not ok:
+                logging.error(f"Failed to send proof_verify_presentation issue for {pres_ex_id}")
+                return False
+
+            return True
+
         # В разных сборках ACA-Py может быть: request-received / presentation-request-received
         if state not in ("request-received", "presentation-request-received", "request_sent", "request-sent"):
             return True
@@ -219,10 +227,10 @@ class Handler:
 
             return True
 
-        if state in ("request-received", "done"):
+        if state == "request-received":
             record, ok = self.admin_provider.credential_issue(cred_ex_id)
             if not ok:
-                logging.error(f"Failed to get cred record for {cred_ex_id}: {record}")
+                logging.error(f"Failed to send cred issue for {cred_ex_id}")
                 return False
 
             return True

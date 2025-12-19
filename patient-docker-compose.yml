@@ -9,7 +9,7 @@ services:
       - ACAPY_ADMIN=["0.0.0.0", "8031"]
       - ACAPY_ADMIN_IN_KEY=patient-admin-key-456
       - ACAPY_WALLET_KEY=StrongPatientWalletKey456
-      - ACAPY_GENESIS_URL=http://172.17.0.1:9000/genesis
+      - ACAPY_GENESIS_URL=http://host.docker.internal:9000/genesis
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8030"]]
       - ACAPY_OUTBOUND_TRANSPORT=["http"]
       - ACAPY_AUTO_PROVISION=true

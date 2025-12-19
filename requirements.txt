@@ -1,3 +1,8 @@
 Flask
 requests
 reportlab
+pydantic
+pydantic-core
+pyaml
+psycopg2
+psycopg2-binary

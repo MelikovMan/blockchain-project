@@ -61,5 +61,6 @@ services:
       --auto-accept-requests
       --endorser-protocol-role endorser
       --auto-endorse-transactions
+      --preserve-exchange-records
 volumes:
  regulator_wallet_data:
