@@ -1,4 +1,3 @@
-from flask import Flask
 from pkg import config_parse
 from internal.domain import config as cfg
 from internal.admin_provider.admin_provider import AdminProvider
@@ -24,8 +23,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
-# handler.get_samples()
 
 http_adapter = run_http_adapter(
     handler=handler,

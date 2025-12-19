@@ -194,8 +194,8 @@ class Handler:
 
     def get_registered_institutions(self):
         sql = ('SELECT * FROM public."REGISTERED_INSTITUTIONS" ri '
-               'JOIN public."CREDENTIAL_INSTITUTION_APPROVE" cia on cia.institution_did=ri.institution_did'
-               'JOIN public."APPROVED_CREDENTIALS" ac on ac.vc_type=cia.vc_type')
+               'LEFT JOIN public."CREDENTIAL_INSTITUTION_APPROVE" cia on cia.institution_did=ri.institution_did'
+               ' LEFT JOIN public."APPROVED_CREDENTIALS" ac on ac.vc_type=cia.vc_type')
 
         institutions, ok = self.repo.execute_and_fetch(sql)
         if ok:

@@ -116,7 +116,7 @@ def get_routes(http_adapter: HttpAdapter):
             {
                 "path": "/credential-issuance-requests/<request_id>/reject",
                 "methods": ["POST"],
-                "name": "credential-issuance-requests-approve",
+                "name": "credential-issuance-requests-reject",
                 "handler": http_adapter.credential_issuance_requests_reject
             },
             {
