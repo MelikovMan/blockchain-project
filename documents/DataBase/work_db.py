@@ -75,7 +75,7 @@ def create_database(db_name: str = "Hospital.db") -> sqlite3.Connection:
         # Создаем таблицу Metadata (Метаданные)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS Metadata (
-            hospital_did INTEGER ,
+            hospital_did VARCHAR(100) ,
             hospital_name VARCHAR(100) NOT NULL,
             hospital_endpoint VARCHAR,
             vc_type INTEGER,
@@ -103,7 +103,7 @@ def create_database(db_name: str = "Hospital.db") -> sqlite3.Connection:
             opisanie TEXT,
             zakl TEXT,
             fio_vrach VARCHAR(50),
-            hospital_did INTEGER,
+            hospital_did VARCHAR(100),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (vc_type, hospital_did) REFERENCES Metadata(vc_type, hospital_did) ON DELETE SET NULL
@@ -422,7 +422,7 @@ class HospitalDBManager:
             print(f"Ошибка при добавлении записи: {e}")
             return -1
 
-    def add_hospital(self, hospital_did : int, name: str, vc_type: int, endpoint: Optional[str] = None) -> int:
+    def add_hospital(self, hospital_did : str, name: str, vc_type: int, endpoint: Optional[str] = None) -> int:
         """
         Добавляет
         новую
@@ -527,7 +527,7 @@ def main():
         with HospitalDBManager() as db_manager:
             # Добавляем новую больницу
             new_hospital_did = db_manager.add_hospital(
-                hospital_did=4,
+                hospital_did="M2yeapcDR9P7pi7mETjBui",
                 name="Областной диагностический центр",
                 vc_type=1,
                 endpoint="https://odc.ru/api/Hospital",
@@ -536,22 +536,46 @@ def main():
 
             # Добавляем новую запись УЗИ
             new_record = {
-                'vc': 4,
-                'data_isl': '2024-01-18 11:00:00',
-                'number_protocol': 2024004,
-                'FIO': 'Смирнова Ольга Васильевна',
-                'gender': 'Ж',
-                'date_birth': '1988-05-12 00:00:00',
-                'number_med_card': 901234,
-                'napr_otd': 'Урологическое отделение',
-                'vid_issled': 'УЗИ почек и мочевого пузыря',
-                'vc_type': 1,
-                'scaner': 'Toshiba Aplio 500',
-                'datchik': 'Конвексный 3.5 МГц',
-                'opisanie': 'Исследование почек в поперечной и продольной плоскостях. Оценка размеров, структуры, наличия конкрементов.',
-                'zakl': 'Почки обычных размеров и структуры. Конкрементов не выявлено.',
-                'fio_vrach': 'Иванов П.К.',
-                'hospital_did': new_hospital_did
+            'vc': 4,
+            'data_isl': '2024-01-18 11:00:00',
+            'number_protocol': 2024004,
+            'FIO': 'Смирнова Ольга Васильевна',
+            'gender': 'Ж',
+            'date_birth': '1988-05-12 00:00:00',
+            'number_med_card': 901234,
+            'napr_otd': 'Кардиологический центр поликлиники СКАЛ',
+            'vid_issled': 'Триплексное сканирование артерий экстракраниального отдела брахиоцефальной системы',
+            'vc_type': 1,
+            'scaner': 'PHILIPS EPIQ5G',
+            'datchik': 'Конвексный 3.5 МГц',
+            'opisanie': '''
+            1.Стенки артерий неравномерно утолщены (КИМ 1,1-1.3 мм), дифференциация на слои
+нарушена.
+Паравазальные мягкие ткани не изменены.
+2.Диаметры общей, внутренней, наружной сонных, подключичной артерий с обеих сторон и
+плече-головного ствола в пределах нормы с обеих сторон.
+В бифуркации правой ОСА гетерогенная АСБ стеноз до 50%, в ВСА пролонгированная
+гетерогенная АСБ стеноз более 70% (ЛСК до 230-250 см/сек.
+В просвете левой ОСА гетерогенная пролонгированная АСБ стеноз до 40%, в бифуркации ЛОСА
+гетерогенная АСБ стеноз до 45-50%, в ВСА гетерогенная АСБ стеноз до 40-45%.
+Линейная скорость кровотока (ЛСК) по общим сонным артериям, по внутренним сонным
+артериям в пределах возрастной нормы.
+3. Диаметр ПА : в пределах нормы с обеих сторон, устья не лоцируются.
+ЛСК по позвоночным артериям в интравертебральном отделе в диапазоне нормативных
+значений .
+Вход позвоночной артерии в канал поперечных отростков шейных позвонков - на уровне С6
+позвонка с обеих сторон .
+Отмечается непрямолинейность хода позвоночных артерий в интравертебральных сегментах
+без локальных изменений ЛСК.
+4. Кровоток по подключичным артериям и в брахиоцефальном стволе – магистральный
+неизмененный.
+5. Внутренняя яремная и подключичная вены проходимы с обеих сторон.
+Кровоток по ним фазный, синхронизирован с дыханием
+            ''',
+            'zakl': '''Ультразвуковые признаки стенозирующего атеросклероза брахиоцефальных
+артерий в экстракраниальном отделе, стеноз правой ВСА более 70%''',
+            'fio_vrach': 'Иванов П.К.',
+            'hospital_did': new_hospital_did
             }
             base_name="UZI"
 
@@ -576,7 +600,6 @@ def main():
 if __name__ == "__main__":
     # Проверка доступности sqlite3
     print(f"Версия SQLite: {sqlite3.sqlite_version}")
-    print(f"Версия модуля SQLite3: {sqlite3.version}")
 
     # Запуск основной функции
     main()
