@@ -46,8 +46,8 @@ pip install -r requirements.txt
 7. Также в разных терминалах запустите контроллеры (последовательность важна):
 ```
 # python init_controller.py
-# python regular_controller.py
-python hospital_controller.py
+# python regular_controller/main.py
+python hospital_controller/main.py
 python patient_controller.py
 ```
 Последовательность тестирования:
@@ -76,7 +76,7 @@ pip install -r requirements.txt
 ```
 8. Также в разных терминалах запустите контроллеры (последовательность важна):
 ```
-python3 hospital_controller.py
+python3 hospital/hospital_controller.py
 python3 patient_controller.py
 ```
 
